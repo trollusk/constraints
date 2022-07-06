@@ -3,14 +3,8 @@ Scriptname ConstraintsPlayerScript extends ReferenceAlias
 import Debug
 
 ; TODO
-; - faction hate does nothing
-; - pickpocket/steal from world - item remains in player inventory (duplicated)
-; - stealing from containers - not detected
-; - buy/sell - story quests "bought BLANK from BLANK"
-; - burn in sunlight - not toggling properly
-; - need-user-friendly messages
-; - when player blocked from selling an item, need to claw back the gold they received
-; - remember confidence of followers. 1=cautious 2=average 3=brave 4=foolhardy
+; - toggling hate OFF doesn't stop combat
+; - test the gold bookkeeping on rejected transactions, steealing, pickpocketing
 
 ConstraintsMCMQuest property mcmOptions auto
 ConstraintsStoryQuest_AddToPlayer property SQ_AddToPlayer auto
@@ -27,6 +21,7 @@ Spell property damageSmithing auto
 Spell property damageAlchemy auto
 Spell property damageEnchanting auto
 Spell property sunDamageSpell auto
+MagicEffect property burnInSunlightEffect auto
 int property goldOverflow auto
 
 Faction property factionStormcloaks auto
@@ -38,9 +33,26 @@ Faction property factionVigilants auto
 Faction property factionWinterholdCollege auto
 Faction property factionDarkBrotherhood auto
 
+Faction property EnemyOfStormcloaks auto
+Faction property EnemyOfLegion auto
+Faction property EnemyOfCompanions auto
+Faction property EnemyOfThalmor auto
+Faction property EnemyOfThievesGuild auto
+Faction property EnemyOfVigilants auto
+Faction property EnemyOfWinterholdCollege auto
+Faction property EnemyOfDarkBrotherhood auto
+
+; state
 Furniture lastFurniture = none			; used to remember furniture we interacted with in OnSit
 int lastGoldAdded = 0
+int lastGoldRemoved = 0
 int MAX_FOLLOWERS = 100					; max number of followers whose confidence we will remember
+int startingBarterPlayerGold = 0
+Form rejectedBarterItem = none
+FormList property knownSpells auto
+Form property lastItemAddedBase auto	; base form of the last non-gold item acquired by the player
+Form property lastItemAddedOwner auto	; actorbase or faction that is the direct owner of last acquired item
+int property lastItemAddedCount auto
 
 ; bool property noOneHanded auto
 ; bool property noTwoHanded auto
@@ -78,6 +90,17 @@ Event OnInit()
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForKey(Input.GetMappedKey("Sneak"))
+	factionLegion.SetEnemy(EnemyOfLegion)
+	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
+	factionCompanions.SetEnemy(EnemyOfCompanions)
+	factionThalmor.SetEnemy(EnemyOfThalmor)
+	factionThievesGuild.SetEnemy(EnemyOfThievesGuild)
+	factionDarkBrotherhood.SetEnemy(EnemyOfDarkBrotherhood)
+	factionVigilants.SetEnemy(EnemyOfVigilants)
+	factionWinterholdCollege.SetEnemy(EnemyOfWinterholdCollege)
+	if mcmOptions.burnInSunlight
+		RegisterForSingleUpdate(3.0)
+	endif
 EndEvent
 
 
@@ -88,43 +111,67 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForKey(Input.GetMappedKey("Sneak"))
+	factionLegion.SetEnemy(EnemyOfLegion)
+	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
+	factionCompanions.SetEnemy(EnemyOfCompanions)
+	factionThalmor.SetEnemy(EnemyOfThalmor)
+	factionThievesGuild.SetEnemy(EnemyOfThievesGuild)
+	factionDarkBrotherhood.SetEnemy(EnemyOfDarkBrotherhood)
+	factionVigilants.SetEnemy(EnemyOfVigilants)
+	factionWinterholdCollege.SetEnemy(EnemyOfWinterholdCollege)
+	if mcmOptions.burnInSunlight
+		RegisterForSingleUpdate(3.0)
+	endif
+EndEvent
+
+
+Event OnUpdate()
+	; runs every 3s
+	if mcmOptions.burnInSunlight
+		if !player.IsInInterior() && Game.GetSunPositionZ() > 0
+			if !player.HasMagicEffect(burnInSunlightEffect)
+				consoleutil.printmessage("Player does not have sun damage effect, recasting")
+				player.RemoveSpell(sunDamageSpell)
+				player.AddSpell(sunDamageSpell, false)
+			else
+				consoleutil.printmessage("Player has sun damage effect")
+			endif
+		elseif player.HasMagicEffect(burnInSunlightEffect)
+			player.DispelSpell(sunDamageSpell)
+			player.RemoveSpell(sunDamageSpell)
+		endif
+		RegisterForSingleUpdate(3.0)
+	elseif player.HasMagicEffect(burnInSunlightEffect)
+		player.DispelSpell(sunDamageSpell)
+		player.RemoveSpell(sunDamageSpell)
+	endif
 EndEvent
 
 
 Event OnMenuClose(string menu)
-	consoleutil.printmessage("Menu closed: " + menu)
 	if menu == "Journal Menu"
 		; Runs after MCM closes
 		; Deal with immediate effects of any toggled options
-		; if mcmOptions.noSmith
-			; AddSpellOnce(player, damageSmithing)
-		; else
-			; player.DispelSpell(damageSmithing)
-		; endif
-		; if mcmOptions.noAlchemy
-			; AddSpellOnce(player, damageAlchemy)
-		; else
-			; player.DispelSpell(damageAlchemy)
-		; endif
-		; if mcmOptions.noEnchant
-			; AddSpellOnce(player, damageEnchanting)
-		; else
-			; player.DispelSpell(damageEnchanting)
-		; endif
+		
 		if mcmOptions.noSpeechcraft
 			AddSpellOnce(player, damageSpeech)
 		else
-			player.DispelSpell(damageSpeech)
+			player.RemoveSpell(damageSpeech)
 		endif
 		
 		if mcmOptions.noStealth && player.IsSneaking()
 			StopSneaking()
 		endif
+		RegisterForKey(Input.GetMappedKey("Sneak"))
+		
+		UnequipProhibitedItems()
+
 		if mcmOptions.noFollow
 			MakeFollowersCowardly()
 		else
 			RestoreBraveFollowers()
 		endif
+		
 		if mcmOptions.goldCap > 0
 			StoreExcessGold()
 		elseif goldOverflow > 0
@@ -132,86 +179,102 @@ Event OnMenuClose(string menu)
 			goldOverflow = 0
 		endif
 		
+		if mcmOptions.noAlteration || mcmOptions.noConjuration || mcmOptions.noIllusion || mcmOptions.noDestruction || mcmOptions.noRestoration
+			int spellIndex = player.GetSpellCount()
+			knownSpells.Revert()
+			while spellIndex > 0
+				spellIndex -= 1
+				knownSpells.AddForm(player.GetNthSpell(spellIndex))
+			endwhile
+		endif
+		
 		if mcmOptions.burnInSunlight
-			AddSpellOnce(player, sunDamageSpell)
+			player.RemoveSpell(sunDamageSpell)
+			player.AddSpell(sunDamageSpell, false)
+			RegisterForSingleUpdate(3.0)
 		else
 			player.DispelSpell(sunDamageSpell)
+			player.RemoveSpell(sunDamageSpell)
 		endif
+		
 		consoleutil.printmessage("burn=" + mcmOptions.burnInSunlight + " player.HasSpell()=" + player.hasSpell(sunDamageSpell))
-		if mcmOptions.hateLegion != FactionHatesPlayer(factionLegion)
-			factionLegion.SetPlayerEnemy(mcmOptions.hateLegion)
-		endif
-		if mcmOptions.hateStormcloaks != FactionHatesPlayer(factionStormcloaks)
-			factionStormcloaks.SetPlayerEnemy(mcmOptions.hateStormcloaks)
-		endif
-		if mcmOptions.hateCompanions != FactionHatesPlayer(factionCompanions)
-			factionCompanions.SetPlayerEnemy(mcmOptions.hateCompanions)
-		endif
-		if mcmOptions.hateThalmor != FactionHatesPlayer(factionThalmor)
-			factionThalmor.SetPlayerEnemy(mcmOptions.hateThalmor)
-		endif
-		if mcmOptions.hateThievesGuild != FactionHatesPlayer(factionThievesGuild)
-			factionThievesGuild.SetPlayerEnemy(mcmOptions.hateThievesGuild)
-		endif
-		if mcmOptions.hateDarkBrotherhood != FactionHatesPlayer(factionDarkBrotherhood)
-			factionDarkBrotherhood.SetPlayerEnemy(mcmOptions.hateDarkBrotherhood)
-		endif
-		if mcmOptions.hateVigilants != FactionHatesPlayer(factionVigilants)
-			factionVigilants.SetPlayerEnemy(mcmOptions.hateVigilants)
-		endif
-		if mcmOptions.hateWinterholdCollege != FactionHatesPlayer(factionWinterholdCollege)
-			factionWinterholdCollege.SetPlayerEnemy(mcmOptions.hateWinterholdCollege)
-		endif
-		UnequipProhibitedItems()
-		consoleutil.printmessage("1h " + mcmOptions.noOneHanded + ", 2h " + mcmOptions.noTwoHanded + ", bow " + mcmOptions.noRanged + ", shld " + mcmOptions.noShield + ", light " + mcmOptions.noLight + ", heavy " + mcmOptions.noHeavy)
-		consoleutil.printmessage("alch " + mcmOptions.noAlchemy + ", ench " + mcmOptions.noEnchant + ", smith " + mcmOptions.noSmith + ", follow " + mcmOptions.noFollow)
-		consoleutil.printmessage(", alt " + mcmOptions.noAlteration + ", conj " + mcmOptions.noConjuration + ", ill " + mcmOptions.noIllusion + ", dest " + mcmOptions.noDestruction + ", rest " + mcmOptions.noRestoration + ", shout " + mcmOptions.noShout)
-		consoleutil.printmessage(", sneak " + mcmOptions.noStealth + ", steal " + mcmOptions.noSteal + ", pick " + mcmOptions.noPickpocket + ", lock " + mcmOptions.noLockpick + ", buy " + mcmOptions.noBuy + ", sell " + mcmOptions.noSell)
+		
+		UpdateFactionRelation(factionLegion, mcmOptions.hateLegion, EnemyOfLegion)
+		UpdateFactionRelation(factionStormcloaks, mcmOptions.hateStormcloaks, EnemyOfStormcloaks)
+		UpdateFactionRelation(factionCompanions, mcmOptions.hateCompanions, EnemyOfCompanions)
+		UpdateFactionRelation(factionThalmor, mcmOptions.hateThalmor, EnemyOfThalmor)
+		UpdateFactionRelation(factionThievesGuild, mcmOptions.hateThievesGuild, EnemyOfThievesGuild)
+		UpdateFactionRelation(factionDarkBrotherhood, mcmOptions.hateDarkBrotherhood, EnemyOfDarkBrotherhood)
+		UpdateFactionRelation(factionVigilants, mcmOptions.hateVigilants, EnemyOfVigilants)
+		UpdateFactionRelation(factionWinterholdCollege, mcmOptions.hateWinterholdCollege, EnemyOfWinterholdCollege)
 	endif
 EndEvent
 
 
-bool Function FactionHatesPlayer(Faction fac)
-	return fac.GetReaction(playerFaction) == 1
+Function UpdateFactionRelation(Faction fac, bool hateFaction, Faction enemyFaction)
+	if hateFaction && !player.IsInFaction(enemyFaction)
+		player.AddToFaction(enemyFaction)
+		notification("Members of the " + fac.GetName() + " will now attack you on sight.")
+	elseif !hateFaction && player.IsInFaction(enemyFaction)
+		player.RemoveFromFaction(enemyFaction)
+		StopCombatWithFaction(fac)
+		notification("Members of the " + fac.GetName() + " will no longer attack you on sight.")
+	endif
+EndFunction
+
+
+Function StopCombatWithFaction(Faction fac)
+	Actor[] actors = PO3_SKSEFunctions.GetActorsByProcessingLevel(0)		; all actors in loaded cells
+	int actorIndex = actors.Length
+	while actorIndex > 0
+		Actor npc = actors[actorIndex]
+		if npc.IsInCombat() && npc.IsHostileToActor(player) && npc.IsInFaction(fac)
+			consoleutil.printmessage(" > enemy " + npc.GetDisplayName() + "|" + npc.GetName()  + " id=" + npc.GetFormID() + " is in faction " + fac.GetName())
+			consoleutil.printmessage("  > objref=" + (npc as ObjectReference))
+			npc.StopCombat()
+		endif
+		actorIndex -= 1
+	endwhile
 EndFunction
 
 
 Event OnMenuOpen(string menu)
-	consoleutil.printmessage("Menu opened: " + menu)
 	if mcmOptions.noLockpick && menu == "Lockpicking Menu"
-		consoleutil.printmessage("player is picking a lock")
+		notification("You may not pick locks.")
 		ForceCloseMenu("Lockpicking Menu")
 	
-	elseif menu == "Crafting Menu" && lastFurniture
-		consoleutil.printmessage("Opened crafting menu, lastfurniture = " + lastFurniture.GetName())
-	
+	elseif lastFurniture && menu == "Crafting Menu" 
 		if mcmOptions.noEnchant && (lastFurniture.HasKeywordString("isEnchanting") || lastFurniture.HasKeywordString("WICraftingEnchanting"))
-			consoleutil.printmessage("player began enchanting")
+			notification("You may not use enchanting stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
 		elseif mcmOptions.noAlchemy && (lastFurniture.HasKeywordString("isAlchemy") || lastFurniture.HasKeywordString("WICraftingAlchemy"))
-			consoleutil.printmessage("player began alchemy")
+			notification("You may not use alchemy stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
 		elseif mcmOptions.noSmith && IsSmithingStation(lastFurniture)
-			consoleutil.printmessage("player began smithing")
+			notification("You may not use smithing stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
 		endif
 	
 	elseif mcmOptions.noTrain && menu == "Training Menu"
-		consoleutil.printmessage("player began training")
+		notification("You may not use skill trainers.")
 		ForceCloseMenu("Training Menu")
-	elseif (mcmOptions.noBuy && mcmOptions.noSell) && menu == "BarterMenu"
-		consoleutil.printmessage("player began bartering")
-		ForceCloseMenu("BarterMenu")
+	elseif menu == "BarterMenu"
+		if (mcmOptions.noBuy && mcmOptions.noSell)
+			notification("You may not buy or sell items.")
+			ForceCloseMenu("BarterMenu")
+		else
+			startingBarterPlayerGold = player.GetGoldAmount()
+			rejectedBarterItem = none
+		endif
 	endif
 EndEvent
 
 
 Event OnKeyDown(int keycode)
 	if (keycode == Input.GetMappedKey("Sneak"))
-		consoleutil.printmessage("sneak key pressed")
 		if mcmOptions.noStealth
 			StopSneaking()
 		endif
@@ -221,7 +284,6 @@ EndEvent
 
 Event OnCombatStateChanged (Actor target, int combatState)
 	if mcmOptions.noFollow && combatState == 1
-		consoleutil.printmessage("player entered combat")
 		MakeFollowersCowardly()
 	endif
 EndEvent
@@ -229,19 +291,17 @@ EndEvent
 
 Event OnObjectEquipped (Form base, ObjectReference ref)
 	
-	consoleutil.printmessage("player equipped item: " + base.GetName())
 	if !PO3_SKSEFunctions.IsQuestItem(ref)
 		if (base as Weapon) || (base as Armor) || (base as Ammo)
 			if IsProhibitedItem(base)
-				consoleutil.printmessage("player equipped a prohibited item: " + base.GetName())
+				consoleutil.printmessage("You may not equip that item.")
 				player.UnequipItem(base)
 				ForceRefreshInventoryMenu()
 			endif
 		elseif base as Spell
 			Spell sp = base as Spell
-			consoleutil.printmessage("player equipped a spell: (" + GetSpellSchool(sp) + " school)  prohibiteditem=" + IsProhibitedItem(base))
 			if IsProhibitedSchool(GetSpellSchool(sp))
-				consoleutil.printmessage("spell school is prohibited")
+				notification("You may not equip that spell.")
 				if player.GetEquippedSpell(0) == sp
 					player.UnequipSpell(sp, 0)
 				endif
@@ -251,30 +311,33 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 				if player.GetEquippedSpell(2) == sp
 					player.UnequipSpell(sp, 2)
 				endif
-				;ForceRefreshMagicMenu()
 				ForceCloseMenu("MagicMenu")
 			elseif mcmOptions.noShout && player.GetEquippedSpell(2) == sp
-				consoleutil.printmessage("unequipping power")
+				notification("You may not equip powers.")
 				player.UnequipSpell(player.GetEquippedSpell(2), 2)
-				;ForceRefreshMagicMenu()
 				ForceCloseMenu("MagicMenu")
 			endif
 		elseif base as Shout
 			Shout sh = base as Shout
-			consoleutil.printmessage("player equipped a shout")
+			notification("You may not equip shouts.")
 			if mcmOptions.noShout
 				player.UnequipShout(sh)
-				ForceRefreshMagicMenu()
+				ForceCloseMenu("MagicMenu")
 			endif
 		elseif base as Book
-			consoleutil.printmessage("player equipped a book")
 			if (base as Book).GetSpell()
 				Spell sp = (base as Book).GetSpell()
 				if IsProhibitedSchool(GetSpellSchool(sp))
-					consoleutil.printmessage("player learning a spell from the school of " + GetSpellSchool(sp))
-					; This event triggers AFTER we have learned the spell, so we always appear to know the spell
-					player.AddItem(base, 1, true)
-					player.RemoveSpell(sp)
+					notification("You may not learn spells from the school of " + GetSpellSchool(sp) + ".")
+					; Return the spellbook to the player's inventory
+					if !knownSpells.HasForm(sp)
+						; we have newly learned the spell - we did not know it before. Return the book
+						; and unlearn the spell.
+						player.RemoveSpell(sp)
+						player.AddItem(base, 1, true)
+					else
+						; we already knew the spell before noXSchool was turned on. Do not remove the spell.
+					endif
 				endif
 			endif
 		endif
@@ -288,58 +351,105 @@ EndEvent
 Event OnSit (ObjectReference furnref)
 	Form furn = furnref.GetBaseObject()
 	lastFurniture = furn as Furniture
-	consoleutil.printmessage("Last furniture set to: " + lastFurniture.GetName())
 EndEvent
 
 
 Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReference source)
-	consoleutil.printmessage("item added to player: " + base.GetName() + " x" +count+ " source=" + source.GetDisplayName())
 	if base == goldBase
 		lastGoldAdded = count
+		lastItemAddedCount = count
+		lastItemAddedBase = base
+		lastItemAddedOwner = itemref.GetActorOwner()
+		if !lastItemAddedOwner
+			lastItemAddedOwner = itemref.GetFactionOwner()
+		endif
 		StoreExcessGold()
 	elseif PO3_SKSEFunctions.IsQuestItem(itemref)
 		; ignore as it's a quest item
-	elseif mcmOptions.noBuy && UI.IsMenuOpen("BarterMenu") 
-		; not gold, so presumably we bought this item
-		consoleutil.printmessage("player bought " + base.GetName() + " from someone (? " + source.GetDisplayName() + "), returning it")
-		if itemref
-			source.AddItem(itemref, count)
-			player.RemoveItem(itemref, count)
+	elseif UI.IsMenuOpen("BarterMenu") 
+		if mcmOptions.noSell && rejectedBarterItem && ((itemref == rejectedBarterItem) || (base == rejectedBarterItem))
+			; we tried to SELL this item and it has been returned to us because noSell is true
+			consoleutil.printmessage("item " + base.GetName() + " could not be sold so was returned to player")
+			rejectedBarterItem = none
+		elseif mcmOptions.noBuy
+			; we must have bought this item, so return it to source
+			notification("You may not buy items.")
+			if itemref
+				source.AddItem(itemref, count)
+				player.RemoveItem(itemref, count)
+				rejectedBarterItem = itemref
+			else
+				source.AddItem(base, count)
+				player.RemoveItem(base, count)
+				rejectedBarterItem = base
+			endif
 		else
-			source.AddItem(base, count)
-			player.RemoveItem(base, count)
+			; we bought something, which we are allowed to do.
+			int inventoryGold = player.GetGoldAmount()
+			consoleutil.printmessage("Player purchased " + base.GetName() + ", player inventory gold now " + inventoryGold)
+			startingBarterPlayerGold = inventoryGold
+			lastItemAddedCount = count
+			lastItemAddedBase = base
+			lastItemAddedOwner = itemref.GetActorOwner()
+			if !lastItemAddedOwner
+				lastItemAddedOwner = itemref.GetFactionOwner()
+			endif
 		endif
 	else
-		SQ_AddToPlayer.lastItemAddedCount = count
+		; picked up item, not gold. We can't remember its reference directly as it won't persist, so we have
+		; to remember any important details.
+		lastItemAddedCount = count
+		lastItemAddedBase = base
+		lastItemAddedOwner = itemref.GetActorOwner()
+		if !lastItemAddedOwner
+			lastItemAddedOwner = itemref.GetFactionOwner()
+		endif
+		consoleutil.printmessage("Item added to player: " + base.GetName() + " x" + count + ", source=" + source.GetDisplayName())
+		consoleutil.printmessage(" > set lastItemAddedBase=" + lastItemAddedBase.GetName() + ", lastItemAddedOwner=" + lastItemAddedOwner.GetName())
 	endif
 EndEvent
 
 
 Event OnItemRemoved (Form base, int count, ObjectReference itemref, ObjectReference dest)
-	consoleutil.printmessage("(item removed from player: " + base.GetName() + " x" + count + ", to " + dest.GetDisplayName())
 	if PO3_SKSEFunctions.IsQuestItem(itemref)
 		;
-	elseif mcmOptions.noSell && base != goldBase && UI.IsMenuOpen("BarterMenu") 
-		; we must have sold this item
-		consoleutil.printmessage("player sold " + base.GetName() + " to someone (? " + dest.GetDisplayName() + "), returning it")
-		if itemref
+	elseif UI.IsMenuOpen("BarterMenu") 
+		if base == goldBase
+			lastGoldRemoved = count
+		elseif mcmOptions.noBuy  && rejectedBarterItem && ((itemref == rejectedBarterItem) || (base == rejectedBarterItem))
+			; the removed item is something we bought, but were not allowed to
+			consoleutil.printmessage("item " + base.GetName() + " could not be purchased so was returned to vendor")
+			rejectedBarterItem = none
+			SQ_RemoveFromPlayer.lastItemRemovedCount = count
+			if lastGoldRemoved > 0
+				player.AddItem(goldBase, lastGoldRemoved)
+				lastGoldRemoved = 0
+				StoreExcessGold()
+			endif
+		elseif mcmOptions.noSell
+			; we must have sold this item, but we are not allowed to
+			consoleutil.printmessage("player sold " + base.GetName() + " to someone (? " + dest.GetDisplayName() + "), returning it")
+			if itemref
 				player.AddItem(itemref, count)
 				dest.RemoveItem(itemref, count)
+				rejectedBarterItem = itemref
 			else
 				player.AddItem(base, count)
 				dest.RemoveItem(base, count)
+				rejectedBarterItem = base
 			endif
-	else
-		SQ_RemoveFromPlayer.lastItemRemovedCount = count
+			RemoveGold(lastGoldAdded)
+			lastGoldAdded = 0
+		else
+			SQ_RemoveFromPlayer.lastItemRemovedCount = count
+		endif
 	endif
 EndEvent
 
 
-
-
 Function AddSpellOnce(Actor who, Spell sp)
 	if !who.HasSpell(sp)
-		who.AddSpell(sp)
+		who.AddSpell(sp, false)
 	else
 		consoleutil.printmessage("Can't add spell " + sp.GetName() + ", already present")
 	endif	
@@ -374,6 +484,24 @@ Function StoreExcessGold()
 	endif
 EndFunction
 
+
+Function RemoveGold (int amount)
+	int inventoryGold = player.GetGoldAmount()
+	consoleutil.printmessage("Removing " + amount + " player gold (current inventory gold " +inventoryGold+ ", overflow "+goldOverflow+")")
+	if amount > 0
+		if !mcmOptions.goldCap || goldOverflow <= 0
+			player.RemoveItem(goldBase, amount)
+		elseif amount <= inventoryGold
+			player.RemoveItem(goldBase, amount)
+		else
+			player.RemoveItem(goldBase, inventoryGold)
+			goldOverflow -= (amount - inventoryGold)
+			if goldOverflow < 0
+				goldOverflow = 0
+			endif
+		endif
+	endif
+EndFunction
 
 
 string Function GetSpellSchool(Spell sp)
@@ -420,15 +548,6 @@ Function ForceRefreshInventoryMenu()
 EndFunction
 
 
-Function ForceRefreshMagicMenu()
-	; player.AddSpell(spellToken,true)
-	; Utility.Wait(0.1)
-	; player.RemoveSpell(spellToken)
-	UI.invokeBool("MagicMenu", "_global.skyui.components.list.ListLayout.Refresh", true)
-	UI.invokeBool("HUD Menu", "_global.skyui.components.list.ListLayout.Refresh", true)
-EndFunction
-
-
 Function StopSneaking()
 	if player.IsSneaking()
 		notification("You may not sneak.")
@@ -444,15 +563,13 @@ Function UnequipProhibitedItems()
 	while index < items.Length
 		Form item = items[index]
 		if IsProhibitedItem(item)
-			consoleutil.printmessage("unequipped: " + item.GetName())
 			player.UnequipItem(item, false, false)
-		else
-			consoleutil.printmessage("OK: " + item.GetName())
 		endif
 		index += 1
 	endwhile
 	
 	; Need to do spells separately
+	; hand 0=right, 1=left, 2=neither (powers, shouts)
 	int hand = 0
 	while hand < 3
 		Spell sp = player.GetEquippedSpell(hand)
@@ -570,6 +687,11 @@ bool Function IsProhibitedItem(Form base)
 		endif
 	endif
 	return false
+EndFunction
+
+
+bool Function FactionHatesPlayer(Faction fac)
+	return fac.GetReaction(playerFaction) == 1
 EndFunction
 
 

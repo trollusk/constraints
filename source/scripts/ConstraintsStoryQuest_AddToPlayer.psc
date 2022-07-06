@@ -3,38 +3,75 @@ Scriptname ConstraintsStoryQuest_AddToPlayer extends Quest
 import debug
 
 ConstraintsMCMQuest property mcmOptions auto
-ObjectReference property lastItemAddedRef auto
-int property lastItemAddedCount auto
+ConstraintsPlayerScript property playerscript auto
 
 
 Event OnStoryAddToPlayer(ObjectReference ownerref, ObjectReference containerref, Location loc, Form base, int how)
 	Actor player = Game.GetPlayer()
 	Actor owner = ownerref as Actor
 	
-	if lastItemAddedCount < 1
-		lastItemAddedCount = 1
+	consoleutil.printmessage("(ATP) Adding " + base.GetName() + " to player, ownerref=" + ownerref.GetDisplayName() + ", container=" + containerref.GetDisplayName() + ", how=" + how)
+	consoleutil.printmessage(" > Last item: count=" + playerscript.lastItemAddedCount + ", owner=" + playerscript.lastItemAddedOwner.GetName() + ", base=" + playerscript.lastItemAddedBase.GetName())
+	if playerscript.lastItemAddedCount < 1
+		playerscript.lastItemAddedCount = 1
 	endif
-	consoleutil.printmessage("(ATP) item added to player: " + base.GetName() + ", owner=" + ownerref.GetDisplayName() + ", how=" + how)
-	if mcmOptions.noSteal && (how == 1 || (how == 5 && owner))		; stole it
+	if mcmOptions.noSteal && how != 3		; stole it
 		; If the player steals an item from the world, how=1
 		; But if they steal an item from a container, how=5
 		; reverse it here
-		if how == 5 && owner
-			consoleutil.printmessage("(ATP) player stole item from container: " + base.GetName() + " x" + lastItemAddedCount + ", returning it to " + containerref.GetDisplayName())
-			containerref.AddItem(base, lastItemAddedCount)
-			player.RemoveItem(base, lastItemAddedCount)
-		elseif ownerref as Actor && player.GetDistance(ownerref) < 400
-			consoleutil.printmessage("(ATP) player stole item from world: " + base.GetName() + " x" + lastItemAddedCount + ", returning it to " + ownerref.GetDisplayName())
-			ownerref.AddItem(base, lastItemAddedCount)
-			player.RemoveItem(base, lastItemAddedCount)
-		else
-			consoleutil.printmessage("(ATP) player stole item from world: " + base.GetName() + " x" + lastItemAddedCount + ", owner not nearby, dropping it")
-			player.DropObject(base, lastItemAddedCount)
+		if how == 1
+			consoleutil.printmessage(" > stolen from world")
+			if ownerref as Actor && player.GetDistance(ownerref) < 400
+				; stole item from world, owner is nearby
+				notification("You may not steal items.")
+				ownerref.AddItem(base, playerscript.lastItemAddedCount)
+				if base == playerscript.goldBase
+					playerscript.RemoveGold(playerscript.lastItemAddedCount)
+				else
+					player.RemoveItem(base, playerscript.lastItemAddedCount)
+				endif
+			else
+				notification("You may not steal items.")
+				if base == playerscript.goldBase
+					playerscript.RemoveGold(playerscript.lastItemAddedCount)
+					Player.PlaceAtMe(base, playerscript.lastItemAddedCount)
+				else
+					player.DropObject(base, playerscript.lastItemAddedCount)
+				endif
+			endif
+		elseif how == 5
+			; player took an item from a container. May or may not have stolen it.
+			Form containerOwner = containerref.GetActorOwner()
+			if !containerOwner
+				containerOwner = containerref.GetFactionOwner()
+			endif
+			
+			if ownerref
+				consoleutil.printmessage(" > from container, item owned by " + ownerref.GetDisplayName())
+				notification("You may not steal items.")
+				containerref.AddItem(base, playerscript.lastItemAddedCount)
+				if base == playerscript.goldBase
+					playerscript.RemoveGold(playerscript.lastItemAddedCount)
+				else
+					player.RemoveItem(base, playerscript.lastItemAddedCount)
+				endif
+			elseif playerscript.lastItemAddedBase == base && playerscript.lastItemAddedOwner
+				consoleutil.printmessage(" > from container owned by " + playerscript.lastItemAddedOwner.GetName() + " (OK)")
+				; OK
+			else
+				; item had no owner, so is OK
+				consoleutil.printmessage(" > item & container have no owner")
+			endif
 		endif
 	elseif mcmOptions.noPickpocket && how == 3		; pickpocketed it
-		notification("(ATP) player pickpocketed item: " + base.GetName() + " x" + lastItemAddedCount + ", returning it to " + owner.GetDisplayName())
-		owner.AddItem(base, lastItemAddedCount)
-		player.RemoveItem(base, lastItemAddedCount)
+		consoleutil.printmessage(" > pickpocketed from " + owner.GetDisplayName())
+		notification("You may not pickpocket items.")
+		owner.AddItem(base, playerscript.lastItemAddedCount)
+		if base == playerscript.goldBase
+			playerscript.RemoveGold(playerscript.lastItemAddedCount)
+		else
+			player.RemoveItem(base, playerscript.lastItemAddedCount)
+		endif
 	endif
 	self.stop()
 EndEvent
