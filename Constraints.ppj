@@ -1,0 +1,27 @@
+<?xml version='1.0'?><!-- Game is either sse, tesv, or fo4 -->
+<PapyrusProject xmlns="PapyrusProject.xsd" 
+    Flags="TESV_Papyrus_Flags.flg" 
+    Game="sse" 
+    Output="Scripts" 
+    Optimize="false" 
+    Release="false" 
+    Final="false">
+    <Variables>
+        <Variable Name="modpath" Value="c:\wabbajack\streamlinedskyrim\mods" />
+        <Variable Name="gamepath" Value="C:\Steam\steamapps\common\Skyrim Special Edition" />
+    </Variables>
+    <Imports>
+        <Import>.\Source\Scripts</Import>
+        <Import>@modpath\skyui sdk\scripts\source</Import>
+        <Import>@modpath\skse64 - scripts\scripts\source</Import>
+        <Import>@modpath\PapyrusUtil SE - Modders Scripting Utility Functions\Scripts\Source</Import>
+        <Import>@modpath\Mfg Fix\source\scripts</Import>
+        <Import>@modpath\FileAccess Interface for Skyrim SE Scripts - FISSES\scripts\source</Import>
+        <Import>@modpath\ConsoleUtilSSE\source\scripts</Import>
+        <Import>@modpath\powerofthree's Papyrus Extender for SSE\source\scripts</Import>
+        <Import>@gamepath\Data\scripts\source</Import>
+    </Imports>
+    <Folders>
+        <Folder>.\Source\Scripts</Folder>
+    </Folders>
+</PapyrusProject>

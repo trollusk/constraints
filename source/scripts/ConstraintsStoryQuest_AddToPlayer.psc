@@ -6,6 +6,9 @@ ConstraintsMCMQuest property mcmOptions auto
 ConstraintsPlayerScript property playerscript auto
 
 
+; Here we are only interested in stealing and pickpocketing.
+; All other item transactions are dealth with in OnItemAdded/Removed.
+
 Event OnStoryAddToPlayer(ObjectReference ownerref, ObjectReference containerref, Location loc, Form base, int how)
 	Actor player = Game.GetPlayer()
 	Actor owner = ownerref as Actor
@@ -15,7 +18,7 @@ Event OnStoryAddToPlayer(ObjectReference ownerref, ObjectReference containerref,
 	if playerscript.lastItemAddedCount < 1
 		playerscript.lastItemAddedCount = 1
 	endif
-	if mcmOptions.noSteal && how != 3		; stole it
+	if mcmOptions.noSteal && how != 3		; either stole it from world or from container
 		; If the player steals an item from the world, how=1
 		; But if they steal an item from a container, how=5
 		; reverse it here
@@ -34,7 +37,7 @@ Event OnStoryAddToPlayer(ObjectReference ownerref, ObjectReference containerref,
 				notification("You may not steal items.")
 				if base == playerscript.goldBase
 					playerscript.RemoveGold(playerscript.lastItemAddedCount)
-					Player.PlaceAtMe(base, playerscript.lastItemAddedCount)
+					Player.PlaceAtMe(base, playerscript.lastItemAddedCount)		; does this work?
 				else
 					player.DropObject(base, playerscript.lastItemAddedCount)
 				endif

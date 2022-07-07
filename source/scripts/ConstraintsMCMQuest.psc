@@ -33,6 +33,7 @@ int property goldCap auto
 bool property destroyExcessGold auto
 
 bool property burnInSunlight auto
+bool Property noMap auto
 bool property hateStormcloaks auto
 bool property hateLegion auto
 bool property hateCompanions auto
@@ -106,6 +107,7 @@ int iTrain
 int iGoldCap
 int iDestroyExcessGold
 int iBurnInSunlight
+int iMap
 int iLegion
 int iStormcloaks
 int iCompanions
@@ -116,15 +118,13 @@ int iVigilants
 int iWHCollege
 
 
-; TODO would be good if toggling options on had instant effect on leaving MCM
-
-
 Event OnConfigInit()
-	Pages = new string[4]
+	Pages = new string[5]
 	Pages[0] = "Equipment"
 	Pages[1] = "Magic"
 	Pages[2] = "Subterfuge"
 	Pages[3] = "Society"
+	Pages[4] = "Misc"
 EndEvent
 
 
@@ -174,25 +174,20 @@ Event OnPageReset (string page)
 		AddHeaderOption("Crafting")
 		iAlchemy = AddToggleOption("No alchemy", noAlchemy)
 		iEnchant = AddToggleOption("No enchanting", noEnchant)
-		; TODO no shouts
-		; shouts are spells of type "other/shout", equipped in "other" slot
 	elseif (page == "Subterfuge")
 		iStealth = AddToggleOption("No sneaking", noStealth)
 		iLockpick = AddToggleOption("No lockpicking", noLockpick)
 		iPickpocket = AddToggleOption("No picking pockets", noPickpocket)
 		iSteal = AddToggleOption("No stealing", noSteal)
-	elseif (page == "Society") || (page == "Misc")
+	elseif page == "Society"
 		AddHeaderOption("Trade")
 		iSpeechcraft = AddToggleOption("No speechcraft", noSpeechcraft)
 		iBuy = AddToggleOption("No buying", noBuy)
 		iSell = AddToggleOption("No selling", noSell)
 		iTrain = AddToggleOption("No skill trainers", noTrain)
+		AddEmptyOption()
 		iGoldCap = AddSliderOption("Gold cap", goldCap)
 		iDestroyExcessGold = AddToggleOption("Destroy excess gold", destroyExcessGold)
-		AddEmptyOption()
-		AddHeaderOption("Misc")
-		iFollow = AddToggleOption("No combat followers", noFollow)
-		iBurnInSunlight = AddToggleOption("Burn in sunlight", burnInSunlight)
 		SetCursorPosition(1)
 		AddHeaderOption("Enemy Factions")
 		iLegion = AddToggleOption("Imperial Legion", hateLegion)
@@ -203,6 +198,10 @@ Event OnPageReset (string page)
 		iDarkBrotherhood = AddToggleOption("Dark Brotherhood", hateDarkBrotherhood)
 		iVigilants = AddToggleOption("Vigilants", hateVigilants)
 		iWHCollege = AddToggleOption("Winterhold College", hateWinterholdCollege)
+	elseif page == "Misc"
+		iMap = AddToggleOption("No map", noMap)
+		iFollow = AddToggleOption("No combat followers", noFollow)
+		iBurnInSunlight = AddToggleOption("Burn in sunlight", burnInSunlight)
 	endif
 EndEvent
 
@@ -332,6 +331,9 @@ Event OnOptionSelect (int option)
 	elseif option == iBurnInSunlight
 		burnInSunlight = !burnInSunlight
 		SetToggleOptionValue(iBurnInSunlight, burnInSunlight)
+	elseif option == iMap
+		noMap = !noMap
+		SetToggleOptionValue(iMap, noMap)
 	elseif option == iLegion
 		hateLegion = !hateLegion
 		SetToggleOptionValue(iLegion, hateLegion)
@@ -465,6 +467,8 @@ Event OnOptionHighlight(int option)
 		SetInfoText("If true, and you are using a gold cap, then any gold you acquire in excess of the cap will be destroyed rather than stored.")
 	elseif option == iBurnInSunlight
 		SetInfoText("Take continuous health damage whenever you are exposed to daylight.")
+	elseif option == iMap
+		SetInfoText("Prevent yourself from opening the map. This will also mean you are unable to fast travel via the map.")
 	elseif option == iLegion
 		SetInfoText("The Imperial Legion will attack you on sight. Will break quests!")
 	elseif option == iStormcloaks

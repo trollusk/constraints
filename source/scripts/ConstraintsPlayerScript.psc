@@ -2,13 +2,10 @@ Scriptname ConstraintsPlayerScript extends ReferenceAlias
 
 import Debug
 
-; TODO
-; - toggling hate OFF doesn't stop combat
-; - test the gold bookkeeping on rejected transactions, steealing, pickpocketing
+; TODO test the gold bookkeeping on rejected transactions, steealing, pickpocketing
 
 ConstraintsMCMQuest property mcmOptions auto
 ConstraintsStoryQuest_AddToPlayer property SQ_AddToPlayer auto
-ConstraintsStoryQuest_RemoveFromPlayer property SQ_RemoveFromPlayer auto
 
 Actor property player auto
 Faction property playerFaction auto
@@ -22,7 +19,6 @@ Spell property damageAlchemy auto
 Spell property damageEnchanting auto
 Spell property sunDamageSpell auto
 MagicEffect property burnInSunlightEffect auto
-int property goldOverflow auto
 
 Faction property factionStormcloaks auto
 Faction property factionLegion auto
@@ -44,43 +40,12 @@ Faction property EnemyOfDarkBrotherhood auto
 
 ; state
 Furniture lastFurniture = none			; used to remember furniture we interacted with in OnSit
-int lastGoldAdded = 0
-int lastGoldRemoved = 0
 int MAX_FOLLOWERS = 100					; max number of followers whose confidence we will remember
-int startingBarterPlayerGold = 0
-Form rejectedBarterItem = none
 FormList property knownSpells auto
 Form property lastItemAddedBase auto	; base form of the last non-gold item acquired by the player
 Form property lastItemAddedOwner auto	; actorbase or faction that is the direct owner of last acquired item
 int property lastItemAddedCount auto
-
-; bool property noOneHanded auto
-; bool property noTwoHanded auto
-; bool property noEdged auto
-; bool property noRanged auto
-; bool property noShield auto
-; bool property noLight auto
-; bool property noHeavy auto
-; bool property noSmith auto
-; bool property noAlteration auto
-; bool property noConjuration auto
-; bool property noIllusion auto
-; bool property noDestruction auto
-; bool property noRestoration auto
-; bool property noAlchemy auto
-; bool property noEnchant auto
-
-; bool property noSteal auto
-; bool property noStealth auto
-; bool property noLockpick auto
-; bool property noSpeechcraft auto
-; bool property noPickpocket auto
-; bool property noBuy auto
-; bool property noSell auto
-; bool property noFollow auto
-; bool property noShout auto
-; bool property noTrain auto
-; int property goldCap auto
+int property goldOverflow auto
 
 
 Event OnInit()
@@ -89,6 +54,7 @@ Event OnInit()
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
+	RegisterForMenu("MapMenu")		
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -110,6 +76,7 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
+	RegisterForMenu("MapMenu")
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -211,33 +178,6 @@ Event OnMenuClose(string menu)
 EndEvent
 
 
-Function UpdateFactionRelation(Faction fac, bool hateFaction, Faction enemyFaction)
-	if hateFaction && !player.IsInFaction(enemyFaction)
-		player.AddToFaction(enemyFaction)
-		notification("Members of the " + fac.GetName() + " will now attack you on sight.")
-	elseif !hateFaction && player.IsInFaction(enemyFaction)
-		player.RemoveFromFaction(enemyFaction)
-		StopCombatWithFaction(fac)
-		notification("Members of the " + fac.GetName() + " will no longer attack you on sight.")
-	endif
-EndFunction
-
-
-Function StopCombatWithFaction(Faction fac)
-	Actor[] actors = PO3_SKSEFunctions.GetActorsByProcessingLevel(0)		; all actors in loaded cells
-	int actorIndex = actors.Length
-	while actorIndex > 0
-		Actor npc = actors[actorIndex]
-		if npc.IsInCombat() && npc.IsHostileToActor(player) && npc.IsInFaction(fac)
-			consoleutil.printmessage(" > enemy " + npc.GetDisplayName() + "|" + npc.GetName()  + " id=" + npc.GetFormID() + " is in faction " + fac.GetName())
-			consoleutil.printmessage("  > objref=" + (npc as ObjectReference))
-			npc.StopCombat()
-		endif
-		actorIndex -= 1
-	endwhile
-EndFunction
-
-
 Event OnMenuOpen(string menu)
 	if mcmOptions.noLockpick && menu == "Lockpicking Menu"
 		notification("You may not pick locks.")
@@ -265,10 +205,9 @@ Event OnMenuOpen(string menu)
 		if (mcmOptions.noBuy && mcmOptions.noSell)
 			notification("You may not buy or sell items.")
 			ForceCloseMenu("BarterMenu")
-		else
-			startingBarterPlayerGold = player.GetGoldAmount()
-			rejectedBarterItem = none
 		endif
+	elseif mcmOptions.noMap && menu == "MapMenu"
+		ForceCloseMenu("MapMenu")
 	endif
 EndEvent
 
@@ -345,104 +284,94 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 EndEvent
 
 
-; Various mods can cause significant delays between interacting with the crafting station, and the crafting menu opening.
-; alternative is to record the station here, then do the rest in OnMenuOpen
-
 Event OnSit (ObjectReference furnref)
 	Form furn = furnref.GetBaseObject()
 	lastFurniture = furn as Furniture
 EndEvent
 
+; if nosell, cant remove items 
+; if nobuy, cant remove gold
+
+; if nosell, cant add gold
+; if nobuy, cant add items 
 
 Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReference source)
+	; player picks up item or takes it from container
+	; gold: player paid for completing a quest
+	; player stole item from world or container
+	; player pickpocketed item
+	; gold: player stole gold
+	; gold: player pickpocketed gold
+	; in bartermenu:
+	;   player bought this item (noBuy = false)
+	;   gold: player has been paid for sold item (noSell = false)
+	;   gold: player bought item but was not allowed to, so gold is being refunded to player (noBuy = true)
+	;   player sold item but not allowed to so it is being returned to player (noSell = true)
+
+	if PO3_SKSEFunctions.IsQuestItem(itemref)
+		return
+	endif
+	
+	if UI.IsMenuOpen("BarterMenu") 
+		if mcmOptions.noBuy && !mcmOptions.noSell
+			if base != goldBase
+				if itemref
+					source.AddItem(itemref, count)
+					player.RemoveItem(itemref, count)
+				else
+					source.AddItem(base, count)
+					player.RemoveItem(base, count)
+				endif
+			endif
+		elseif mcmOptions.noSell && !mcmOptions.noBuy
+			if base == goldBase
+				source.AddItem(goldBase, count)
+				RemoveGold(count)
+			endif
+		endif
+	endif
+	
 	if base == goldBase
-		lastGoldAdded = count
-		lastItemAddedCount = count
-		lastItemAddedBase = base
-		lastItemAddedOwner = itemref.GetActorOwner()
-		if !lastItemAddedOwner
-			lastItemAddedOwner = itemref.GetFactionOwner()
-		endif
 		StoreExcessGold()
-	elseif PO3_SKSEFunctions.IsQuestItem(itemref)
-		; ignore as it's a quest item
-	elseif UI.IsMenuOpen("BarterMenu") 
-		if mcmOptions.noSell && rejectedBarterItem && ((itemref == rejectedBarterItem) || (base == rejectedBarterItem))
-			; we tried to SELL this item and it has been returned to us because noSell is true
-			consoleutil.printmessage("item " + base.GetName() + " could not be sold so was returned to player")
-			rejectedBarterItem = none
-		elseif mcmOptions.noBuy
-			; we must have bought this item, so return it to source
-			notification("You may not buy items.")
-			if itemref
-				source.AddItem(itemref, count)
-				player.RemoveItem(itemref, count)
-				rejectedBarterItem = itemref
-			else
-				source.AddItem(base, count)
-				player.RemoveItem(base, count)
-				rejectedBarterItem = base
-			endif
-		else
-			; we bought something, which we are allowed to do.
-			int inventoryGold = player.GetGoldAmount()
-			consoleutil.printmessage("Player purchased " + base.GetName() + ", player inventory gold now " + inventoryGold)
-			startingBarterPlayerGold = inventoryGold
-			lastItemAddedCount = count
-			lastItemAddedBase = base
-			lastItemAddedOwner = itemref.GetActorOwner()
-			if !lastItemAddedOwner
-				lastItemAddedOwner = itemref.GetFactionOwner()
-			endif
-		endif
-	else
-		; picked up item, not gold. We can't remember its reference directly as it won't persist, so we have
-		; to remember any important details.
-		lastItemAddedCount = count
-		lastItemAddedBase = base
-		lastItemAddedOwner = itemref.GetActorOwner()
-		if !lastItemAddedOwner
-			lastItemAddedOwner = itemref.GetFactionOwner()
-		endif
-		consoleutil.printmessage("Item added to player: " + base.GetName() + " x" + count + ", source=" + source.GetDisplayName())
-		consoleutil.printmessage(" > set lastItemAddedBase=" + lastItemAddedBase.GetName() + ", lastItemAddedOwner=" + lastItemAddedOwner.GetName())
 	endif
 EndEvent
 
 
 Event OnItemRemoved (Form base, int count, ObjectReference itemref, ObjectReference dest)
+	; player drops item or stores it in container
+	; player consumes item
+	; player gives item to someone
+	; gold: player bribes guard, etc
+	; in bartermenu:
+	;   player sells item
+	;   gold: player pays for purchased item
+	;   gold: player sold item but was not allowed to, so gold is being removed and refunded to vendor
+	;   player bought item but not allowed to so it is being returned to vendor
 	if PO3_SKSEFunctions.IsQuestItem(itemref)
-		;
-	elseif UI.IsMenuOpen("BarterMenu") 
-		if base == goldBase
-			lastGoldRemoved = count
-		elseif mcmOptions.noBuy  && rejectedBarterItem && ((itemref == rejectedBarterItem) || (base == rejectedBarterItem))
-			; the removed item is something we bought, but were not allowed to
-			consoleutil.printmessage("item " + base.GetName() + " could not be purchased so was returned to vendor")
-			rejectedBarterItem = none
-			SQ_RemoveFromPlayer.lastItemRemovedCount = count
-			if lastGoldRemoved > 0
-				player.AddItem(goldBase, lastGoldRemoved)
-				lastGoldRemoved = 0
-				StoreExcessGold()
+		return
+	endif
+	
+	if UI.IsMenuOpen("BarterMenu") 
+		if mcmOptions.noBuy && !mcmOptions.noSell
+			if base == goldBase
+				player.AddItem(goldBase, count)
+				dest.RemoveItem(goldBase, count)
 			endif
-		elseif mcmOptions.noSell
-			; we must have sold this item, but we are not allowed to
-			consoleutil.printmessage("player sold " + base.GetName() + " to someone (? " + dest.GetDisplayName() + "), returning it")
-			if itemref
-				player.AddItem(itemref, count)
-				dest.RemoveItem(itemref, count)
-				rejectedBarterItem = itemref
-			else
-				player.AddItem(base, count)
-				dest.RemoveItem(base, count)
-				rejectedBarterItem = base
+		elseif mcmOptions.noSell && !mcmOptions.noBuy
+			if base != goldBase
+				if itemref
+					player.AddItem(itemref, count)
+					dest.RemoveItem(itemref, count)
+				else
+					player.AddItem(base, count)
+					dest.RemoveItem(base, count)
+				endif
 			endif
-			RemoveGold(lastGoldAdded)
-			lastGoldAdded = 0
-		else
-			SQ_RemoveFromPlayer.lastItemRemovedCount = count
 		endif
+	endif
+	
+	if base == goldBase
+		StoreExcessGold()
 	endif
 EndEvent
 
@@ -693,6 +622,34 @@ EndFunction
 bool Function FactionHatesPlayer(Faction fac)
 	return fac.GetReaction(playerFaction) == 1
 EndFunction
+
+
+Function UpdateFactionRelation(Faction fac, bool hateFaction, Faction enemyFaction)
+	if hateFaction && !player.IsInFaction(enemyFaction)
+		player.AddToFaction(enemyFaction)
+		notification("Members of the " + fac.GetName() + " will now attack you on sight.")
+	elseif !hateFaction && player.IsInFaction(enemyFaction)
+		player.RemoveFromFaction(enemyFaction)
+		StopCombatWithFaction(fac)
+		notification("Members of the " + fac.GetName() + " will no longer attack you on sight.")
+	endif
+EndFunction
+
+
+Function StopCombatWithFaction(Faction fac)
+	Actor[] actors = PO3_SKSEFunctions.GetActorsByProcessingLevel(0)		; all actors in loaded cells
+	int actorIndex = actors.Length
+	while actorIndex > 0
+		Actor npc = actors[actorIndex]
+		if npc.IsInCombat() && npc.IsHostileToActor(player) && npc.IsInFaction(fac)
+			consoleutil.printmessage(" > enemy " + npc.GetDisplayName() + "|" + npc.GetName()  + " id=" + npc.GetFormID() + " is in faction " + fac.GetName())
+			consoleutil.printmessage("  > objref=" + (npc as ObjectReference))
+			npc.StopCombat()
+		endif
+		actorIndex -= 1
+	endwhile
+EndFunction
+
 
 
 Function MakeFollowersCowardly()
