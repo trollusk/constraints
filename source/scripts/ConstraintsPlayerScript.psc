@@ -2,7 +2,17 @@ Scriptname ConstraintsPlayerScript extends ReferenceAlias
 
 import Debug
 
-; TODO test the gold bookkeeping on rejected transactions, steealing, pickpocketing
+; script attached to player alias
+
+; TODO no swords, no axes, no maces, no daggers, no staves
+; TODO staff.GetEnchantment(), ench.GetCostliestEffectIndex(), ench.GetNthEffectMagicEffect(), keyword
+; or wpn.GetSkill() ?
+; TODO book with text starting <font face='$MageScriptFont'> or DwemerFont DragonFont FalmerFont
+; UI.InvokeString("Book Menu", "_root.Menu_mc.SetBookText", "foo")
+;  UI.InvokeString("Book Menu", "_root.Menu_mc.ReferenceTextField.SetText", "foo")
+; UI.SetString("Book Menu", "_root.Menu_mc.ReferenceTextField.text", "foo")
+; Game.GetCurrentCrosshairRef()
+; TODO change all book titles to gibberish
 
 ConstraintsMCMQuest property mcmOptions auto
 ConstraintsStoryQuest_AddToPlayer property SQ_AddToPlayer auto
@@ -19,6 +29,7 @@ Spell property damageAlchemy auto
 Spell property damageEnchanting auto
 Spell property sunDamageSpell auto
 MagicEffect property burnInSunlightEffect auto
+Perk property noPickpocketPerk auto
 
 Faction property factionStormcloaks auto
 Faction property factionLegion auto
@@ -54,7 +65,8 @@ Event OnInit()
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
-	RegisterForMenu("MapMenu")		
+	RegisterForMenu("MapMenu")	
+	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -70,6 +82,8 @@ Event OnInit()
 EndEvent
 
 
+; OnPlayerLoadGame events can only be received by player/player alias
+
 Event OnPlayerLoadGame()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
@@ -77,6 +91,7 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")
+	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -97,11 +112,11 @@ Event OnUpdate()
 	if mcmOptions.burnInSunlight
 		if !player.IsInInterior() && Game.GetSunPositionZ() > 0
 			if !player.HasMagicEffect(burnInSunlightEffect)
-				consoleutil.printmessage("Player does not have sun damage effect, recasting")
+				;consoleutil.printmessage("Player does not have sun damage effect, recasting")
 				player.RemoveSpell(sunDamageSpell)
 				player.AddSpell(sunDamageSpell, false)
 			else
-				consoleutil.printmessage("Player has sun damage effect")
+				;consoleutil.printmessage("Player has sun damage effect")
 			endif
 		elseif player.HasMagicEffect(burnInSunlightEffect)
 			player.DispelSpell(sunDamageSpell)
@@ -164,8 +179,12 @@ Event OnMenuClose(string menu)
 			player.RemoveSpell(sunDamageSpell)
 		endif
 		
-		consoleutil.printmessage("burn=" + mcmOptions.burnInSunlight + " player.HasSpell()=" + player.hasSpell(sunDamageSpell))
-		
+		if mcmOptions.noPickpocket && !player.HasPerk(noPickpocketPerk)
+			player.AddPerk(noPickpocketPerk)
+		elseif !mcmOptions.noPickpocket && player.HasPerk(noPickpocketPerk)
+			player.RemovePerk(noPickpocketPerk)
+		endif
+
 		UpdateFactionRelation(factionLegion, mcmOptions.hateLegion, EnemyOfLegion)
 		UpdateFactionRelation(factionStormcloaks, mcmOptions.hateStormcloaks, EnemyOfStormcloaks)
 		UpdateFactionRelation(factionCompanions, mcmOptions.hateCompanions, EnemyOfCompanions)
@@ -208,6 +227,10 @@ Event OnMenuOpen(string menu)
 		endif
 	elseif mcmOptions.noMap && menu == "MapMenu"
 		ForceCloseMenu("MapMenu")
+	elseif mcmOptions.noReading && menu == "Book Menu"
+		UI.InvokeString("Book Menu", "_root.Menu_mc.ReferenceTextField.SetText", "foo")
+		UI.SetString("Book Menu", "_root.Menu_mc.ReferenceTextField.text", "bar")
+		UI.InvokeString("Book Menu", "_root.Menu_mc.SetBookText", "baz")
 	endif
 EndEvent
 
@@ -233,7 +256,7 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 	if !PO3_SKSEFunctions.IsQuestItem(ref)
 		if (base as Weapon) || (base as Armor) || (base as Ammo)
 			if IsProhibitedItem(base)
-				consoleutil.printmessage("You may not equip that item.")
+				notification("You may not equip that item.")
 				player.UnequipItem(base)
 				ForceRefreshInventoryMenu()
 			endif
@@ -264,9 +287,10 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 				ForceCloseMenu("MagicMenu")
 			endif
 		elseif base as Book
-			if (base as Book).GetSpell()
-				Spell sp = (base as Book).GetSpell()
-				if IsProhibitedSchool(GetSpellSchool(sp))
+			Book bk = Base as book
+			if bk.GetSpell()
+				Spell sp = bk.GetSpell()
+				if noReading || IsProhibitedSchool(GetSpellSchool(sp))
 					notification("You may not learn spells from the school of " + GetSpellSchool(sp) + ".")
 					; Return the spellbook to the player's inventory
 					if !knownSpells.HasForm(sp)
@@ -278,6 +302,18 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 						; we already knew the spell before noXSchool was turned on. Do not remove the spell.
 					endif
 				endif
+			elseif noReading && bk.GetSkill() > 0
+				; TODO undo skill gain
+				consoleutil.printmessage("Read a skillbook. Skill " + bk.GetSkill() + " = " + SkillIDToName(ActorValueInfo.GetActorValueInfoByID(bk.GetSkill())))
+			endif
+		elseif base as Scroll
+			if noReading
+				; TODO prevent spell being cast
+				consoleutil.printmessage("Force player to unequip scroll")
+				player.UnequipItem(base)
+			elseif IsProhibitedSchool(GetScrollSchool(base as Scroll))
+				consoleutil.printmessage("Force player to unequip scroll")
+				player.UnequipItem(base)
 			endif
 		endif
 	endif
@@ -315,6 +351,7 @@ Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReferenc
 	if UI.IsMenuOpen("BarterMenu") 
 		if mcmOptions.noBuy && !mcmOptions.noSell
 			if base != goldBase
+				Notification("You may not buy items.")
 				if itemref
 					source.AddItem(itemref, count)
 					player.RemoveItem(itemref, count)
@@ -331,6 +368,16 @@ Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReferenc
 		endif
 	endif
 	
+	if (mcmOptions.weightCap > 0) && (player.GetTotalItemWeight() > mcmOptions.weightCap)
+		consoleutil.printmessage("Total player encumbrance: " + player.GetTotalItemWeight())
+		notification("You drop the " + base.GetName() + ", since it is too heavy for you to carry.")
+		if itemref
+			player.DropObject(itemref, count)
+		else
+			player.DropObject(base, count)
+		endif
+	endif
+
 	if base == goldBase
 		StoreExcessGold()
 	endif
@@ -359,6 +406,7 @@ Event OnItemRemoved (Form base, int count, ObjectReference itemref, ObjectRefere
 			endif
 		elseif mcmOptions.noSell && !mcmOptions.noBuy
 			if base != goldBase
+				Notification("You may not sell items.")
 				if itemref
 					player.AddItem(itemref, count)
 					dest.RemoveItem(itemref, count)
@@ -380,7 +428,7 @@ Function AddSpellOnce(Actor who, Spell sp)
 	if !who.HasSpell(sp)
 		who.AddSpell(sp, false)
 	else
-		consoleutil.printmessage("Can't add spell " + sp.GetName() + ", already present")
+		;consoleutil.printmessage("Can't add spell " + sp.GetName() + ", already present")
 	endif	
 EndFunction
 
@@ -405,7 +453,7 @@ Function StoreExcessGold()
 	int goldAmount = player.GetGoldAmount()
 	if mcmOptions.goldCap > 0 && goldAmount > mcmOptions.goldCap
 		int excess = goldAmount - mcmOptions.goldCap
-		consoleutil.printmessage("Removing " + excess + " excess gold...")
+		notification("Removing " + excess + " excess gold...")
 		player.RemoveItem(goldBase, excess)
 		if !mcmOptions.destroyExcessGold
 			goldOverflow += excess
@@ -416,7 +464,7 @@ EndFunction
 
 Function RemoveGold (int amount)
 	int inventoryGold = player.GetGoldAmount()
-	consoleutil.printmessage("Removing " + amount + " player gold (current inventory gold " +inventoryGold+ ", overflow "+goldOverflow+")")
+	;consoleutil.printmessage("Removing " + amount + " player gold (current inventory gold " +inventoryGold+ ", overflow "+goldOverflow+")")
 	if amount > 0
 		if !mcmOptions.goldCap || goldOverflow <= 0
 			player.RemoveItem(goldBase, amount)
@@ -436,6 +484,34 @@ EndFunction
 string Function GetSpellSchool(Spell sp)
 	MagicEffect mgef = sp.GetNthEffectMagicEffect(sp.GetCostliestEffectIndex())
 	return mgef.GetAssociatedSkill()
+EndFunction
+
+
+string Function GetEnchantmentSchool(Enchantment ench)
+	MagicEffect mgef = ench.GetNthEffectMagicEffect(ench.GetCostliestEffectIndex())
+	return mgef.GetAssociatedSkill()
+EndFunction
+
+
+string Function GetScrollSchool(Scroll scr)
+	MagicEffect mgef = scr.GetNthEffectMagicEffect(scr.GetCostliestEffectIndex())
+	return mgef.GetAssociatedSkill()
+EndFunction
+
+
+; Return the enchantment that is cast when the staff is wielded and used by the player.
+
+Enchantment Function GetStaffEnchantment(Weapon staff)
+	if staff.IsStaff()
+		Enchantment ench = staff.GetEnchantment()
+		if PO3_SKSEFunctions.GetEnchantmentType(ench) == 12		; 12=staff, 6=other, -1=none
+			return ench
+		else
+			return none
+		endif
+	else
+		return none
+	endif
 EndFunction
 
 
@@ -487,7 +563,7 @@ EndFunction
 
 Function UnequipProhibitedItems()
 	Form[] items = PO3_SKSEFunctions.AddAllEquippedItemsToArray(player)
-	consoleutil.printmessage("Got list of " + items.Length + " equipped items")
+	;consoleutil.printmessage("Got list of " + items.Length + " equipped items")
 	int index = 0
 	while index < items.Length
 		Form item = items[index]
@@ -584,10 +660,25 @@ bool Function IsProhibitedItem(Form base)
 			return true
 		elseif mcmOptions.noEdged && (wpn.IsBattleAxe() || wpn.IsGreatsword() || wpn.IsSword() || wpn.IsDagger() || wpn.IsWarAxe())
 			return true
+		elseif mcmOptions.noStaff && wpn.IsStaff()
+			return true
 		elseif mcmOptions.noOneHanded && (wpn.IsSword() || wpn.IsMace() || wpn.IsDagger() || wpn.IsWarAxe())
 			return true
 		elseif mcmOptions.noTwoHanded && (wpn.IsWarHammer() || wpn.IsBattleAxe() || wpn.IsGreatsword() || wpn.IsStaff())
 			return true
+		elseif mcmOptions.noDagger && wpn.IsDagger()
+			return true
+		elseif mcmOptions.noAxe1H && wpn.IsWarAxe()
+			return true
+		elseif mcmOptions.noMace1H && wpn.IsMace()
+			return true
+		elseif mcmOptions.noSword1H && wpn.IsSword()
+			return true
+		endif
+		if wpn.IsStaff()
+			if IsProhibitedSchool(GetEnchantmentSchool(GetStaffEnchantment(wpn)))
+				return true
+			endif
 		endif
 	elseif base as Armor
 		Armor arm = base as Armor
@@ -642,8 +733,8 @@ Function StopCombatWithFaction(Faction fac)
 	while actorIndex > 0
 		Actor npc = actors[actorIndex]
 		if npc.IsInCombat() && npc.IsHostileToActor(player) && npc.IsInFaction(fac)
-			consoleutil.printmessage(" > enemy " + npc.GetDisplayName() + "|" + npc.GetName()  + " id=" + npc.GetFormID() + " is in faction " + fac.GetName())
-			consoleutil.printmessage("  > objref=" + (npc as ObjectReference))
+			;consoleutil.printmessage(" > enemy " + npc.GetDisplayName() + "|" + npc.GetName()  + " id=" + npc.GetFormID() + " is in faction " + fac.GetName())
+			;consoleutil.printmessage("  > objref=" + (npc as ObjectReference))
 			npc.StopCombat()
 		endif
 		actorIndex -= 1
@@ -665,7 +756,7 @@ EndFunction
 Function MakeFollowerCowardly(Actor follower)
 	int confidence = follower.GetActorValue("confidence") as int
 	if confidence > 0
-		consoleutil.printmessage("Cowardifying follower: " + follower.GetDisplayName())
+		;consoleutil.printmessage("Cowardifying follower: " + follower.GetDisplayName())
 		follower.SetActorValue("confidence", 0)
 		mcmOptions.cowardlyFollowers.AddForm(follower)
 		int index = mcmOptions.cowardlyFollowers.Find(follower)
@@ -687,9 +778,9 @@ Function RestoreBraveFollowers()
 		if followerIndex < MAX_FOLLOWERS
 			confidence = mcmOptions.followerConfidence[followerIndex]
 		endif
-		consoleutil.printmessage("Restoring follower: " + follower.GetDisplayName())
+		;consoleutil.printmessage("Restoring follower: " + follower.GetDisplayName())
 		if followerIndex < 0
-			consoleutil.printmessage("Error: could not find Actor " + follower + "in follower formlist, using default confidence of 2")
+			;consoleutil.printmessage("Error: could not find Actor " + follower + "in follower formlist, using default confidence of 2")
 			confidence = 2
 		endif
 		follower.SetActorValue("confidence", confidence)

@@ -8,6 +8,11 @@ bool _onehanded
 bool property noTwoHanded auto
 bool property noRanged auto
 bool property noEdged auto
+bool Property noStaff Auto
+bool property noDagger auto
+bool property noSword1H auto
+bool property noMace1H auto
+bool property noAxe1H auto
 bool property noShield auto
 bool property noLight auto
 bool property noHeavy auto
@@ -30,10 +35,12 @@ bool property noFollow auto
 bool property noShout auto
 bool property noTrain auto
 int property goldCap auto
+int property weightCap auto
 bool property destroyExcessGold auto
 
 bool property burnInSunlight auto
 bool Property noMap auto
+bool property noReading auto
 bool property hateStormcloaks auto
 bool property hateLegion auto
 bool property hateCompanions auto
@@ -67,6 +74,12 @@ int[] property followerConfidence auto
 int iOneHanded
 int iTwoHanded
 int iRanged
+int iEdged
+int iStaff
+int iDagger
+int iSword1H
+int iAxe1H
+int iMace1H
 int iShield
 int iLight
 int iHeavy
@@ -105,9 +118,11 @@ int iMaterialWood		; weapon only
 int iShout
 int iTrain
 int iGoldCap
+int iWeightCap
 int iDestroyExcessGold
 int iBurnInSunlight
 int iMap
+int iReading
 int iLegion
 int iStormcloaks
 int iCompanions
@@ -118,14 +133,14 @@ int iVigilants
 int iWHCollege
 
 
-Event OnConfigInit()
-	Pages = new string[5]
-	Pages[0] = "Equipment"
-	Pages[1] = "Magic"
-	Pages[2] = "Subterfuge"
-	Pages[3] = "Society"
-	Pages[4] = "Misc"
-EndEvent
+; Event OnConfigInit()
+; 	Pages = new string[5]
+; 	Pages[0] = "Equipment"
+; 	Pages[1] = "Magic"
+; 	Pages[2] = "Subterfuge"
+; 	Pages[3] = "Society"
+; 	Pages[4] = "Misc"
+; EndEvent
 
 
 Event OnPageReset (string page)
@@ -135,6 +150,12 @@ Event OnPageReset (string page)
 		iOneHanded = AddToggleOption("No one-handed weapons", _onehanded)
 		iTwoHanded = AddToggleOption("No two-handed weapons", noTwoHanded)
 		iRanged = AddToggleOption("No ranged weapons", noRanged)
+		iEdged = AddToggleOption("No edged weapons", noEdged)
+		iStaff = AddToggleOption("No staves", noStaff)
+		iDagger = AddToggleOption("No daggers", noDagger)
+		iSword1H = AddToggleOption("No one-handed swords", noSword1H)
+		iMace1H = AddToggleOption("No one-handed maces", noMace1H)
+		iAxe1H = AddToggleOption("No one-handed axes", noAxe1H)
 		iShield = AddToggleOption("No shields", noShield)
 		;SetCursorPosition(1)
 		AddEmptyOption()
@@ -144,6 +165,9 @@ Event OnPageReset (string page)
 		AddEmptyOption()
 		AddHeaderOption("Smithing")
 		iSmith = AddToggleOption("No smithing", noSmith)
+		AddEmptyOption()
+		AddHeaderOption("Encumbrance")
+		iWeightCap = AddSliderOption("Encumbrance limit", weightCap)
 		SetCursorPosition(1)
 		AddHeaderOption("Prohibited Materials")
 		iMaterialIron = AddToggleOption("No Iron", noMaterialIron)
@@ -196,10 +220,11 @@ Event OnPageReset (string page)
 		iThalmor = AddToggleOption("Thalmor", hateThalmor)
 		iThievesGuild = AddToggleOption("Thieves Guild", hateThievesGuild)
 		iDarkBrotherhood = AddToggleOption("Dark Brotherhood", hateDarkBrotherhood)
-		iVigilants = AddToggleOption("Vigilants", hateVigilants)
+		iVigilants = AddToggleOption("Vigilants of Stendarr", hateVigilants)
 		iWHCollege = AddToggleOption("Winterhold College", hateWinterholdCollege)
-	elseif page == "Misc"
+	elseif page == "Misc." || page == "Misc"
 		iMap = AddToggleOption("No map", noMap)
+		iReading = AddToggleOption("Illiterate", noReading)
 		iFollow = AddToggleOption("No combat followers", noFollow)
 		iBurnInSunlight = AddToggleOption("Burn in sunlight", burnInSunlight)
 	endif
@@ -217,6 +242,24 @@ Event OnOptionSelect (int option)
 	elseif option == iRanged
 		noRanged = !noRanged
 		SetToggleOptionValue(iRanged, noRanged)
+	elseif option == iEdged
+		noEdged = !noEdged
+		SetToggleOptionValue(iEdged, noEdged)
+	elseif option == iStaff
+		noStaff = !noStaff
+		SetToggleOptionValue(iStaff, noStaff)
+	elseif option == iDagger
+		noDagger = !noDagger
+		SetToggleOptionValue(iDagger, noDagger)
+	elseif option == iSword1H
+		noSword1H = !noSword1H
+		SetToggleOptionValue(iSword1H, noSword1H)
+	elseif option == iAxe1H
+		noAxe1H = !noAxe1H
+		SetToggleOptionValue(iAxe1H, noAxe1H)
+	elseif option == iMace1H
+		noMace1H = !noMace1H
+		SetToggleOptionValue(iMace1H, noMace1H)
 	elseif option == iShield
 		noShield = !noShield
 		SetToggleOptionValue(iShield, noShield)
@@ -369,7 +412,12 @@ Event OnOptionSliderOpen (int option)
 		SetSliderDialogDefaultValue(0)
 		SetSliderDialogRange(0, 1000)
 		SetSliderDialogInterval(10)
-	EndIf
+	elseif (option == iWeightCap)
+			SetSliderDialogStartValue(weightCap)
+			SetSliderDialogDefaultValue(0)
+			SetSliderDialogRange(0, 500)
+			SetSliderDialogInterval(5)
+		EndIf
 EndEvent
 
 
@@ -377,6 +425,9 @@ Event OnOptionSliderAccept (int option, float value)
 	if (option == iGoldCap)
 		goldCap = value as int
 		SetSliderOptionValue(iGoldCap, goldCap)
+	elseif (option == iWeightCap)
+		weightCap = value as int
+		SetSliderOptionValue(iWeightCap, weightCap)
 	EndIf
 	ForcePageReset()
 EndEvent
@@ -384,11 +435,23 @@ EndEvent
 
 Event OnOptionHighlight(int option)
 	if option == iOneHanded
-		SetInfoText("Prevent yourself from equipping one-handed weapons.")
+		SetInfoText("Prevent yourself from equipping one-handed melee weapons.")
 	elseif option == iTwoHanded
-		SetInfoText("Prevent yourself from equipping two-handed weapons.")
+		SetInfoText("Prevent yourself from equipping two-handed melee weapons.")
 	elseif option == iRanged
 		SetInfoText("Prevent yourself from equipping ranged weapons.")
+	elseif option == iEdged
+		SetInfoText("Prevent yourself from equipping edged weapons (daggers, swords, axes).")
+	elseif option == iStaff
+		SetInfoText("Prevent yourself from equipping a staff. Note that staves are neither one-handed nor two-handed weapons, as they improve neither skill.")
+	elseif option == iDagger
+		SetInfoText("Prevent yourself from equipping daggers.")
+	elseif option == iSword1H
+		SetInfoText("Prevent yourself from equipping one-handed swords.")
+	elseif option == iAxe1H
+		SetInfoText("Prevent yourself from equipping one-handed axes.")
+	elseif option == iMace1H
+		SetInfoText("Prevent yourself from equipping one-handed blunt weapons.")
 	elseif option == iShield
 		SetInfoText("Prevent yourself from equipping shields.")
 	elseif option == iLight
@@ -397,6 +460,8 @@ Event OnOptionHighlight(int option)
 		SetInfoText("Prevent yourself from equipping heavy armor.")
 	elseif option == iSmith
 		SetInfoText("Prevent yourself from using smithing stations.")
+	elseif option == iWeightCap
+		SetInfoText("Prevent yourself from carrying more than this amount of weight. If you pick up an item that puts you over this limit, the item will be dropped at your feet. Your normal in-game encumbrance limit still applies as well. Zero means that this option is not active.")
 	elseif option == iAlteration
 		SetInfoText("Prevent yourself from learning or casting Alteration spells.")
 	elseif option == iConjuration
@@ -420,7 +485,7 @@ Event OnOptionHighlight(int option)
 	elseif option == iSpeechcraft
 		SetInfoText("Set your speechcraft skill to zero.")
 	elseif option == iPickpocket
-		SetInfoText("Prevent yourself from picking pockets.")
+		SetInfoText("You will always fail at pickpocketing.")
 	elseif option == iBuy
 		SetInfoText("Prevent yourself from buying items from vendors.")
 	elseif option == iSell
@@ -431,44 +496,46 @@ Event OnOptionHighlight(int option)
 		SetInfoText("Prevent yourself from using iron weapons or armor.")
 	elseif option == iMaterialSteel
 		SetInfoText("Prevent yourself from using steel weapons or armor.")
-	elseif option == iMaterialDaedric
-		SetInfoText("Prevent yourself from using Daedric weapons or armor.")
 	elseif option == iMaterialLeather
-		SetInfoText("Prevent yourself from using Leather weapons or armor.")
+		SetInfoText("Prevent yourself from using leather weapons or armor.")
+	elseif option == iMaterialHide
+		SetInfoText("Prevent yourself from using hide weapons or armor.") 
+	elseif option == iMaterialSilver
+		SetInfoText("Prevent yourself from using silver weapons or armor.") ;weapon only
+	elseif option == iMaterialWood
+		SetInfoText("Prevent yourself from using wooden weapons or armor.") ;weapon only
+	elseif option == iMaterialElven
+		SetInfoText("Prevent yourself from using Elven weapons or armor.")
 	elseif option == iMaterialOrcish
 		SetInfoText("Prevent yourself from using Orcish weapons or armor.")
 	elseif option == iMaterialDwarven
 		SetInfoText("Prevent yourself from using Dwarven weapons or armor.")
-	elseif option == iMaterialElven
-		SetInfoText("Prevent yourself from using Elven weapons or armor.")
-	elseif option == iMaterialGlass
-		SetInfoText("Prevent yourself from using Glass weapons or armor.") 
-	elseif option == iMaterialEbony
-		SetInfoText("Prevent yourself from using Ebony weapons or armor.") 
-	elseif option == iMaterialHide
-		SetInfoText("Prevent yourself from using MaterialHide weapons or armor.") 
-	elseif option == iMaterialDragonscale
-		SetInfoText("Prevent yourself from using Dragonscale weapons or armor.")
-	elseif option == iMaterialDragonplate
-		SetInfoText("Prevent yourself from using Dragonplate weapons or armor.")
 	elseif option == iMaterialFalmer
 		SetInfoText("Prevent yourself from using Falmer weapons or armor.")
-	elseif option == iMaterialSilver
-		SetInfoText("Prevent yourself from using Silver weapons or armor.") ;weapon only
-	elseif option == iMaterialWood
-		SetInfoText("Prevent yourself from using Wood weapons or armor.") ;weapon only
+	elseif option == iMaterialDaedric
+		SetInfoText("Prevent yourself from using Daedric weapons or armor.")
+	elseif option == iMaterialGlass
+		SetInfoText("Prevent yourself from using glass weapons or armor.") 
+	elseif option == iMaterialEbony
+		SetInfoText("Prevent yourself from using ebony weapons or armor.") 
+	elseif option == iMaterialDragonscale
+		SetInfoText("Prevent yourself from using dragonscale weapons or armor.")
+	elseif option == iMaterialDragonplate
+		SetInfoText("Prevent yourself from using dragonplate weapons or armor.")
 	elseif option == iShout
-		SetInfoText("Prevent yourself from equipping shouts.")
+		SetInfoText("Prevent yourself from equipping shouts or powers.")
 	elseif option == iTrain
 		SetInfoText("Prevent yourself from using skill trainers.")
 	elseif option == iGoldCap
-		SetInfoText("Prevent yourself from carrying more than this much gold. When you acquire gold in excess of this number, that gold will disappear. If 'Destroy Excess Gold' is false, the gold will be restored when you toggle this option off. Zero means no cap.")
+		SetInfoText("Prevent yourself from carrying more than this much gold. When you acquire gold in excess of this number, that gold will disappear. If 'Destroy Excess Gold' is false, all the disappeared gold will be returned to you when you toggle this option off. Zero means no cap.")
 	elseif option == iDestroyExcessGold
 		SetInfoText("If true, and you are using a gold cap, then any gold you acquire in excess of the cap will be destroyed rather than stored.")
 	elseif option == iBurnInSunlight
 		SetInfoText("Take continuous health damage whenever you are exposed to daylight.")
 	elseif option == iMap
 		SetInfoText("Prevent yourself from opening the map. This will also mean you are unable to fast travel via the map.")
+	elseif option == iReading
+		SetInfoText("Prevent yourself from reading books or other written material. This will also make it impossible to gain skill points or spells from books.")
 	elseif option == iLegion
 		SetInfoText("The Imperial Legion will attack you on sight. Will break quests!")
 	elseif option == iStormcloaks
