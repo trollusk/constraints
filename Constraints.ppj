@@ -23,6 +23,7 @@
         <Import>@modpath\ConsoleUtilSSE\source\scripts</Import>
         <Import>@modpath\powerofthree's Papyrus Extender for SSE\source\scripts</Import>
         <Import>@gamepath\Data\scripts\source</Import>
+        <Import>@modpath\JContainers SE\scripts\source</Import>
     </Imports>
     <Folders>
         <Folder>.\Source\Scripts</Folder>

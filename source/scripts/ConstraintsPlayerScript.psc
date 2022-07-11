@@ -10,7 +10,6 @@ import Debug
 
 ConstraintsMCMQuest property mcmOptions auto
 ConstraintsStoryQuest_AddToPlayer property SQ_AddToPlayer auto
-ConstraintsTargetScript property targetscript auto
 
 Actor property player auto
 Faction property playerFaction auto
@@ -54,11 +53,12 @@ Form property lastItemAddedBase auto	; base form of the last non-gold item acqui
 Form property lastItemAddedOwner auto	; actorbase or faction that is the direct owner of last acquired item
 int property lastItemAddedCount auto
 int property goldOverflow auto
-ReferenceAlias property targetRef auto
+int property bookNames auto         ; JContainers ID of Form:string dictionary matching book forms to their names
+bool property bookNamesHidden auto
+;int property bookReadFlags auto
 
 
 Event OnInit()
-	InitSkillNames()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
@@ -67,7 +67,6 @@ Event OnInit()
 	RegisterForMenu("MapMenu")	
 	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
-    targetscript.InitScript()
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
 	factionCompanions.SetEnemy(EnemyOfCompanions)
@@ -79,13 +78,19 @@ Event OnInit()
 	if mcmOptions.burnInSunlight
 		RegisterForSingleUpdate(3.0)
 	endif
+	InitSkillNames()
+    if bookNames == 0
+        bookNames = JFormMap.object()
+        JValue.retain(bookNames)
+        ;bookReadFlags = JFormMap.object()
+        ;JValue.retain(bookReadFlags)
+    endif
 EndEvent
 
 
 ; OnPlayerLoadGame events can only be received by player/player alias
 
 Event OnPlayerLoadGame()
-	InitSkillNames()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
@@ -94,7 +99,6 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("MapMenu")
 	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
-    targetscript.InitScript()
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
 	factionCompanions.SetEnemy(EnemyOfCompanions)
@@ -106,6 +110,13 @@ Event OnPlayerLoadGame()
 	if mcmOptions.burnInSunlight
 		RegisterForSingleUpdate(3.0)
 	endif
+	InitSkillNames()
+    if bookNames == 0
+        bookNames = JFormMap.object()
+        JValue.retain(bookNames)
+        ;bookReadFlags = JFormMap.object()
+        ;JValue.retain(bookReadFlags)
+    endif
 EndEvent
 
 
@@ -131,16 +142,6 @@ Event OnUpdate()
 		player.RemoveSpell(sunDamageSpell)
 	endif
 EndEvent
-
-
-Function UnnameAllBooks()
-    Form[] books = PO3_SKSEFunctions.GetAllForms(27)
-    int index = 0
-    while index < books.Length
-        books[index].SetName("?????")
-        index += 1
-    endwhile
-EndFunction
 
 
 Event OnMenuClose(string menu)
@@ -198,6 +199,12 @@ Event OnMenuClose(string menu)
 			player.RemovePerk(noPickpocketPerk)
 		endif
 
+        ; if mcmOptions.noReading && !bookNamesHidden
+        ;     UnnameAllBooks()
+        ; elseif !mcmOptions.noReading && bookNamesHidden
+        ;     RestoreBookNames()
+        ; endif
+
 		UpdateFactionRelation(factionLegion, mcmOptions.hateLegion, EnemyOfLegion)
 		UpdateFactionRelation(factionStormcloaks, mcmOptions.hateStormcloaks, EnemyOfStormcloaks)
 		UpdateFactionRelation(factionCompanions, mcmOptions.hateCompanions, EnemyOfCompanions)
@@ -206,7 +213,7 @@ Event OnMenuClose(string menu)
 		UpdateFactionRelation(factionDarkBrotherhood, mcmOptions.hateDarkBrotherhood, EnemyOfDarkBrotherhood)
 		UpdateFactionRelation(factionVigilants, mcmOptions.hateVigilants, EnemyOfVigilants)
 		UpdateFactionRelation(factionWinterholdCollege, mcmOptions.hateWinterholdCollege, EnemyOfWinterholdCollege)
-	endif
+    endif
 EndEvent
 
 
@@ -862,4 +869,71 @@ Function RestoreBraveFollowers()
 	endwhile
 	mcmOptions.cowardlyFollowers.Revert()
 EndFunction
+
+
+Function UnnameAllBooks()
+    Form[] books = PO3_SKSEFunctions.GetAllForms(27)
+    int index = 0
+    while index < books.Length
+        Book bk = books[index] as Book
+        JFormMap.setStr(bookNames, bk, bk.GetName())
+        ;JFormMap.setInt(bookReadFlags, bk, bk.IsRead() as int)
+        if bk.GetWeight() > 0
+            bk.SetName("Book")
+        else
+            bk.SetName("Note")
+        endif
+        ; if !bk.IsRead()
+        ;     PO3_SKSEFunctions.SetReadFlag(bk)
+        ; endif
+        index += 1
+    endwhile
+    notification("Finished concealing book names.")
+    bookNamesHidden = true
+EndFunction
+
+
+Function RestoreBookNames()
+    Form[] books = PO3_SKSEFunctions.GetAllForms(27)
+    int index = 0
+    while index < books.Length
+        Book bk = books[index] as Book
+        string name = JFormMap.getStr(bookNames, bk)
+        ;bool read = JFormMap.getInt(bookReadFlags, bk) as bool
+        if name != ""
+            bk.SetName(name)
+            ; if !read && bk.IsRead()
+            ;     PO3_SKSEFunctions.ClearReadFlag(bk)
+            ; endif
+        endif
+        index += 1
+    endwhile
+    bookNamesHidden = false
+EndFunction
+
+
+
+; Function SavePlayerSkills()
+;     int index = 6
+;     savedPlayerSkills = new int[24]
+;     while index < 24
+;         savedPlayerSkills[index] = player.GetActorValue(skillNames[index]) as int
+;         index += 1
+;     endwhile
+; EndFunction
+
+
+; Function DetectIncreaseInPlayerSkills()
+;     int index = 6
+;     while index < 24
+;         int skillVal = player.GetActorValue(skillNames[index]) as int
+;         if skillVal > savedPlayerSkills[index]
+;             ConsoleUtil.PrintMessage("Skill increased while in book menu: " + skillNames[index])
+;             ; decrement skill
+;             player.ModActorValue(skillNames[index], -1)
+;         endif
+;         index += 1
+;     endwhile
+; EndFunction
+
 
