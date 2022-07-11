@@ -18,6 +18,11 @@ Event OnStoryAddToPlayer(ObjectReference ownerref, ObjectReference containerref,
 	if playerscript.lastItemAddedCount < 1
 		playerscript.lastItemAddedCount = 1
 	endif
+
+	if base == playerscript.inventoryToken
+		return
+	endif
+
 	if mcmOptions.noSteal && how != 3		; either stole it from world or from container
 		; If the player steals an item from the world, how=1
 		; But if they steal an item from a container, how=5

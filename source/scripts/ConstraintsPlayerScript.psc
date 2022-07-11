@@ -4,24 +4,20 @@ import Debug
 
 ; script attached to player alias
 
-; TODO no swords, no axes, no maces, no daggers, no staves
 ; TODO staff.GetEnchantment(), ench.GetCostliestEffectIndex(), ench.GetNthEffectMagicEffect(), keyword
 ; or wpn.GetSkill() ?
 ; TODO book with text starting <font face='$MageScriptFont'> or DwemerFont DragonFont FalmerFont
-; UI.InvokeString("Book Menu", "_root.Menu_mc.SetBookText", "foo")
-;  UI.InvokeString("Book Menu", "_root.Menu_mc.ReferenceTextField.SetText", "foo")
-; UI.SetString("Book Menu", "_root.Menu_mc.ReferenceTextField.text", "foo")
-; Game.GetCurrentCrosshairRef()
-; TODO change all book titles to gibberish
 
 ConstraintsMCMQuest property mcmOptions auto
 ConstraintsStoryQuest_AddToPlayer property SQ_AddToPlayer auto
+ConstraintsTargetScript property targetscript auto
 
 Actor property player auto
 Faction property playerFaction auto
 Armor property inventoryToken auto		; fake item we put into inventory to force menu to refresh
 Spell property spellToken auto			; likewise, for magic menu
 MiscObject property goldBase auto
+ObjectReference property illegibleBook auto
 
 Spell property damageSpeech auto		; constant effect -100 debuffs for various skills
 Spell property damageSmithing auto
@@ -52,14 +48,17 @@ Faction property EnemyOfDarkBrotherhood auto
 ; state
 Furniture lastFurniture = none			; used to remember furniture we interacted with in OnSit
 int MAX_FOLLOWERS = 100					; max number of followers whose confidence we will remember
+string[] skillNames
 FormList property knownSpells auto
 Form property lastItemAddedBase auto	; base form of the last non-gold item acquired by the player
 Form property lastItemAddedOwner auto	; actorbase or faction that is the direct owner of last acquired item
 int property lastItemAddedCount auto
 int property goldOverflow auto
+ReferenceAlias property targetRef auto
 
 
 Event OnInit()
+	InitSkillNames()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
@@ -68,6 +67,7 @@ Event OnInit()
 	RegisterForMenu("MapMenu")	
 	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
+    targetscript.InitScript()
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
 	factionCompanions.SetEnemy(EnemyOfCompanions)
@@ -85,6 +85,7 @@ EndEvent
 ; OnPlayerLoadGame events can only be received by player/player alias
 
 Event OnPlayerLoadGame()
+	InitSkillNames()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
@@ -93,6 +94,7 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("MapMenu")
 	RegisterForMenu("Book Menu")	
 	RegisterForKey(Input.GetMappedKey("Sneak"))
+    targetscript.InitScript()
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
 	factionCompanions.SetEnemy(EnemyOfCompanions)
@@ -109,6 +111,7 @@ EndEvent
 
 Event OnUpdate()
 	; runs every 3s
+
 	if mcmOptions.burnInSunlight
 		if !player.IsInInterior() && Game.GetSunPositionZ() > 0
 			if !player.HasMagicEffect(burnInSunlightEffect)
@@ -128,6 +131,16 @@ Event OnUpdate()
 		player.RemoveSpell(sunDamageSpell)
 	endif
 EndEvent
+
+
+Function UnnameAllBooks()
+    Form[] books = PO3_SKSEFunctions.GetAllForms(27)
+    int index = 0
+    while index < books.Length
+        books[index].SetName("?????")
+        index += 1
+    endwhile
+EndFunction
 
 
 Event OnMenuClose(string menu)
@@ -227,10 +240,10 @@ Event OnMenuOpen(string menu)
 		endif
 	elseif mcmOptions.noMap && menu == "MapMenu"
 		ForceCloseMenu("MapMenu")
+		notification("You may not look at the map.")
 	elseif mcmOptions.noReading && menu == "Book Menu"
-		UI.InvokeString("Book Menu", "_root.Menu_mc.ReferenceTextField.SetText", "foo")
-		UI.SetString("Book Menu", "_root.Menu_mc.ReferenceTextField.text", "bar")
-		UI.InvokeString("Book Menu", "_root.Menu_mc.SetBookText", "baz")
+        ForceCloseMenu("Book Menu")
+        notification("You cannot read.")
 	endif
 EndEvent
 
@@ -274,15 +287,15 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 					player.UnequipSpell(sp, 2)
 				endif
 				ForceCloseMenu("MagicMenu")
-			elseif mcmOptions.noShout && player.GetEquippedSpell(2) == sp
+			elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
 				notification("You may not equip powers.")
 				player.UnequipSpell(player.GetEquippedSpell(2), 2)
 				ForceCloseMenu("MagicMenu")
 			endif
 		elseif base as Shout
 			Shout sh = base as Shout
-			notification("You may not equip shouts.")
 			if mcmOptions.noShout
+    			notification("You may not equip shouts.")
 				player.UnequipShout(sh)
 				ForceCloseMenu("MagicMenu")
 			endif
@@ -290,8 +303,12 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 			Book bk = Base as book
 			if bk.GetSpell()
 				Spell sp = bk.GetSpell()
-				if noReading || IsProhibitedSchool(GetSpellSchool(sp))
-					notification("You may not learn spells from the school of " + GetSpellSchool(sp) + ".")
+				if mcmOptions.noReading || IsProhibitedSchool(GetSpellSchool(sp))
+					if mcmOptions.noReading
+						notification("You cannot read.")
+					else
+						notification("You may not learn spells from the school of " + GetSpellSchool(sp) + ".")
+					endif
 					; Return the spellbook to the player's inventory
 					if !knownSpells.HasForm(sp)
 						; we have newly learned the spell - we did not know it before. Return the book
@@ -302,18 +319,25 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 						; we already knew the spell before noXSchool was turned on. Do not remove the spell.
 					endif
 				endif
-			elseif noReading && bk.GetSkill() > 0
-				; TODO undo skill gain
-				consoleutil.printmessage("Read a skillbook. Skill " + bk.GetSkill() + " = " + SkillIDToName(ActorValueInfo.GetActorValueInfoByID(bk.GetSkill())))
+			elseif mcmOptions.noReading 
+                notification("You cannot read.")
+                if ref
+				    player.UnequipItem(ref)
+                else
+                    player.UnequipItem(base)
+                endif
+                ForceCloseMenu("Book Menu")
+                ForceRefreshInventoryMenu()
 			endif
 		elseif base as Scroll
-			if noReading
-				; TODO prevent spell being cast
-				consoleutil.printmessage("Force player to unequip scroll")
+			if mcmOptions.noReading
+				notification("You cannot read.")
 				player.UnequipItem(base)
+				ForceRefreshInventoryMenu()
 			elseif IsProhibitedSchool(GetScrollSchool(base as Scroll))
-				consoleutil.printmessage("Force player to unequip scroll")
+				notification("You may not cast spells from the school of " + GetScrollSchool(base as Scroll) + ".")
 				player.UnequipItem(base)
+				ForceRefreshInventoryMenu()
 			endif
 		endif
 	endif
@@ -348,6 +372,10 @@ Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReferenc
 		return
 	endif
 	
+	if base == inventoryToken
+		return
+	endif
+
 	if UI.IsMenuOpen("BarterMenu") 
 		if mcmOptions.noBuy && !mcmOptions.noSell
 			if base != goldBase
@@ -369,11 +397,13 @@ Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReferenc
 	endif
 	
 	if (mcmOptions.weightCap > 0) && (player.GetTotalItemWeight() > mcmOptions.weightCap)
-		consoleutil.printmessage("Total player encumbrance: " + player.GetTotalItemWeight())
-		notification("You drop the " + base.GetName() + ", since it is too heavy for you to carry.")
+		; At this point, GetTotalItemWeight includes worn + carried items, and includes the
+		; item we just picked up
 		if itemref
+			notification("You drop the " + itemref.GetDisplayName() + ", since it is too heavy for you to carry.")
 			player.DropObject(itemref, count)
 		else
+			notification("You drop the " + base.GetName() + ", since it is too heavy for you to carry.")
 			player.DropObject(base, count)
 		endif
 	endif
@@ -397,7 +427,11 @@ Event OnItemRemoved (Form base, int count, ObjectReference itemref, ObjectRefere
 	if PO3_SKSEFunctions.IsQuestItem(itemref)
 		return
 	endif
-	
+
+	if base == inventoryToken
+		return
+	endif
+
 	if UI.IsMenuOpen("BarterMenu") 
 		if mcmOptions.noBuy && !mcmOptions.noSell
 			if base == goldBase
@@ -530,6 +564,40 @@ bool Function IsProhibitedSchool(string school)
 		return false
 	endif
 EndFunction
+
+
+Function InitSkillNames()
+	skillNames = new string[24]
+	skillNames[6] = "OneHanded"
+	skillNames[7] = "TwoHanded"
+	skillNames[8] = "Marksman"
+	skillNames[9] = "Block"
+	skillNames[10] = "Smithing"
+	skillNames[11] = "HeavyArmor"
+	skillNames[12] = "LightArmor"
+	skillNames[13] = "Pickpocket"
+	skillNames[14] = "LockPicking"
+	skillNames[15] = "Sneak"
+	skillNames[16] = "Alchemy"
+	skillNames[17] = "SpeechCraft"
+	skillNames[18] = "Alteration"
+	skillNames[19] = "Conjuration"
+	skillNames[20] = "Destruction"
+	skillNames[21] = "Illusion"
+	skillNames[22] = "Restoration"
+	skillNames[23] = "Enchanting"
+EndFunction
+
+
+; https://www.creationkit.com/index.php?title=ActorValueInfo_Script#Actor_Value_IDs
+
+string function SkillIDToName (int id)
+	if id >= 6 && id <= 22
+		return skillNames[id]
+	else
+		return ""
+	endif
+endfunction
 
 
 Function CloseAllMenus()
@@ -693,18 +761,25 @@ bool Function IsProhibitedItem(Form base)
 		Spell sp = base as Spell
 		if IsProhibitedSchool(GetSpellSchool(sp))
 			return true
-		elseif mcmOptions.noShout && player.GetEquippedSpell(2) == sp
+		elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
 			return true
 		endif
 	elseif mcmOptions.noShout && (base as Shout)
 		return true
 	elseif base as Book
+        if mcmOptions.noReading
+            return true
+        endif
 		if (base as Book).GetSpell()
 			Spell sp = (base as Book).GetSpell()
 			if IsProhibitedSchool(GetSpellSchool(sp))
 				return true
 			endif
 		endif
+    elseif base as Scroll
+        if mcmOptions.noReading
+            return true
+        endif
 	endif
 	return false
 EndFunction

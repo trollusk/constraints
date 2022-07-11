@@ -33,6 +33,7 @@ bool property noBuy auto
 bool property noSell auto
 bool property noFollow auto
 bool property noShout auto
+bool property noPower auto
 bool property noTrain auto
 int property goldCap auto
 int property weightCap auto
@@ -116,6 +117,7 @@ int iMaterialSilver		; weapon only
 int iMaterialWood		; weapon only
 
 int iShout
+int iPower
 int iTrain
 int iGoldCap
 int iWeightCap
@@ -193,7 +195,8 @@ Event OnPageReset (string page)
 		iDestruction = AddToggleOption("No Destruction spells", noDestruction)
 		iRestoration = AddToggleOption("No Restoration spells", noRestoration)
 		AddEmptyOption()
-		iShout = AddToggleOption("No shouts or powers", noShout)
+		iShout = AddToggleOption("No shouts", noShout)
+        iPower = AddToggleOption("No powers", noPower)
 		AddEmptyOption()
 		AddHeaderOption("Crafting")
 		iAlchemy = AddToggleOption("No alchemy", noAlchemy)
@@ -368,12 +371,18 @@ Event OnOptionSelect (int option)
 	elseif option == iShout
 		noShout = !noShout
 		SetToggleOptionValue(iShout, noShout)
+	elseif option == iPower
+		noPower = !noPower
+		SetToggleOptionValue(iPower, noPower)
 	elseif option == iDestroyExcessGold
 		destroyExcessGold = !destroyExcessGold
 		SetToggleOptionValue(iDestroyExcessGold, destroyExcessGold)
 	elseif option == iBurnInSunlight
 		burnInSunlight = !burnInSunlight
 		SetToggleOptionValue(iBurnInSunlight, burnInSunlight)
+	elseif option == iReading
+		noReading = !noReading
+		SetToggleOptionValue(iReading, noReading)
 	elseif option == iMap
 		noMap = !noMap
 		SetToggleOptionValue(iMap, noMap)
@@ -523,7 +532,9 @@ Event OnOptionHighlight(int option)
 	elseif option == iMaterialDragonplate
 		SetInfoText("Prevent yourself from using dragonplate weapons or armor.")
 	elseif option == iShout
-		SetInfoText("Prevent yourself from equipping shouts or powers.")
+		SetInfoText("Prevent yourself from equipping shouts.")
+	elseif option == iPower
+		SetInfoText("Prevent yourself from equipping powers.")
 	elseif option == iTrain
 		SetInfoText("Prevent yourself from using skill trainers.")
 	elseif option == iGoldCap

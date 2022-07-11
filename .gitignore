@@ -51,3 +51,7 @@ Thumbs.db
 meta.ini
 *.pex
 .vscode/
+Build/Constraints.zip
+.gitignore
+Constraints.ppj
+Constraints.ppj

@@ -4,11 +4,14 @@
     Game="sse" 
     Output="Scripts" 
     Optimize="false" 
-    Release="false" 
+    Zip="true"
     Final="false">
     <Variables>
+        <Variable Name="ModName" Value="Constraints" />
         <Variable Name="modpath" Value="c:\wabbajack\streamlinedskyrim\mods" />
         <Variable Name="gamepath" Value="C:\Steam\steamapps\common\Skyrim Special Edition" />
+        <!-- <Variable Name="modpath" Value="f:\wabbajack\streamlinedskyrim\mods" />
+        <Variable Name="gamepath" Value="f:\Steamlib\steamapps\common\Skyrim Special Edition" /> -->
     </Variables>
     <Imports>
         <Import>.\Source\Scripts</Import>
@@ -24,4 +27,17 @@
     <Folders>
         <Folder>.\Source\Scripts</Folder>
     </Folders>
+    <ZipFiles Output="Build">
+        <ZipFile Name="@ModName" RootDir="." Compression="deflate">
+            <Include>*.esp</Include>
+            <Include NoRecurse="true">*.bsa</Include>
+            <Match In="source\scripts">*.psc</Match>
+            <Match In="scripts">*.pex</Match>
+            <!-- <Match In="interface">*.*</Match> -->
+            <!-- <Match In="meshes">*.*</Match> -->
+            <!-- <Match In="textures">*.*</Match>
+            <Match In="SKSE">*.*</Match>
+            <Match In="seq">*.*</Match> -->
+        </ZipFile>
+    </ZipFiles>
 </PapyrusProject>
