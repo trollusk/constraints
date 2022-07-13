@@ -406,13 +406,15 @@ Event OnItemAdded (Form base, int count, ObjectReference itemref, ObjectReferenc
 	if (mcmOptions.weightCap > 0) && (player.GetTotalItemWeight() > mcmOptions.weightCap)
 		; At this point, GetTotalItemWeight includes worn + carried items, and includes the
 		; item we just picked up
-		if itemref
-			notification("You drop the " + itemref.GetDisplayName() + ", since it is too heavy for you to carry.")
-			player.DropObject(itemref, count)
-		else
-			notification("You drop the " + base.GetName() + ", since it is too heavy for you to carry.")
-			player.DropObject(base, count)
-		endif
+        if !(base as SoulGem)         ; soulgem (added to inventory on soul trap)
+            if itemref
+                notification("You drop the " + itemref.GetDisplayName() + ", since it is too heavy for you to carry.")
+                player.DropObject(itemref, count)
+            else
+                notification("You drop the " + base.GetName() + ", since it is too heavy for you to carry.")
+                player.DropObject(base, count)
+            endif
+        endif   
 	endif
 
 	if base == goldBase
