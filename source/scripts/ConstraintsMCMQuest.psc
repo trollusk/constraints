@@ -14,8 +14,13 @@ bool property noSword1H auto
 bool property noMace1H auto
 bool property noAxe1H auto
 bool property noShield auto
+
 bool property noLight auto
 bool property noHeavy auto
+bool property noHeadgear auto
+bool property noFootwear auto
+bool property noJewelry auto
+
 bool property noSmith auto
 bool property noAlteration auto
 bool property noConjuration auto
@@ -84,6 +89,9 @@ int iMace1H
 int iShield
 int iLight
 int iHeavy
+int iHeadgear
+int iFootwear
+int iJewelry
 int iSmith
 int iAlteration
 int iConjuration
@@ -164,6 +172,9 @@ Event OnPageReset (string page)
 		AddHeaderOption("Armour")
 		iLight = AddToggleOption("No light armour", noLight)
 		iHeavy = AddToggleOption("No heavy armour", noHeavy)
+        iJewelry = AddToggleOption("No jewelry", noJewelry)
+        iHeadgear = AddToggleOption("No headgear", noHeadgear)
+        iFootwear = AddToggleOption("No footwear", noFootwear)
 		AddEmptyOption()
 		AddHeaderOption("Smithing")
 		iSmith = AddToggleOption("No smithing", noSmith)
@@ -272,6 +283,15 @@ Event OnOptionSelect (int option)
 	elseif option == iHeavy
 		noHeavy = !noHeavy
 		SetToggleOptionValue(iHeavy, noHeavy)
+	elseif option == iHeadgear
+		noHeadgear = !noHeadgear
+		SetToggleOptionValue(iHeadgear, noHeadgear)
+	elseif option == iFootwear
+		noFootwear = !noFootwear
+		SetToggleOptionValue(iFootwear, noFootwear)
+	elseif option == iJewelry
+		noJewelry = !noJewelry
+		SetToggleOptionValue(iJewelry, noJewelry)
 	elseif option == iSmith
 		noSmith = !noSmith
 		SetToggleOptionValue(iSmith, noSmith)
@@ -467,6 +487,12 @@ Event OnOptionHighlight(int option)
 		SetInfoText("Prevent yourself from equipping light armor.")
 	elseif option == iHeavy
 		SetInfoText("Prevent yourself from equipping heavy armor.")
+	elseif option == iHeadgear
+		SetInfoText("Prevent yourself from equipping hats or helmets.")
+	elseif option == iFootwear
+		SetInfoText("Prevent yourself from equipping boots or shoes.")
+	elseif option == iJewelry
+		SetInfoText("Prevent yourself from equipping rings, necklaces or circlets.")
 	elseif option == iSmith
 		SetInfoText("Prevent yourself from using smithing stations.")
 	elseif option == iWeightCap

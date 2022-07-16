@@ -63,9 +63,12 @@ Event OnInit()
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
-	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
+	RegisterForMenu("Journal Menu")			; toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")	
 	RegisterForMenu("Book Menu")	
+	; RegisterForMenu("StatsMenu")            ; perk constellations
+    ; RegisterForMenu("LevelUp Menu")
+    ; RegisterForMenu("MessageBoxMenu")
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -98,6 +101,9 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")
 	RegisterForMenu("Book Menu")	
+	; RegisterForMenu("StatsMenu")
+    ; RegisterForMenu("LevelUp Menu")
+    ; RegisterForMenu("MessageBoxMenu")
 	RegisterForKey(Input.GetMappedKey("Sneak"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
@@ -213,6 +219,10 @@ Event OnMenuClose(string menu)
 		UpdateFactionRelation(factionDarkBrotherhood, mcmOptions.hateDarkBrotherhood, EnemyOfDarkBrotherhood)
 		UpdateFactionRelation(factionVigilants, mcmOptions.hateVigilants, EnemyOfVigilants)
 		UpdateFactionRelation(factionWinterholdCollege, mcmOptions.hateWinterholdCollege, EnemyOfWinterholdCollege)
+    ; elseif menu == "StatsMenu" || menu == "LevelUp Menu"
+    ;     ConsoleUtil.PrintMessage(menu + " close: player.level=" + player.GetLevel() + ", exp=" + Game.GetPlayerExperience() + ", perks=" + Game.GetPerkPoints())
+    ; else
+    ;     ConsoleUtil.PrintMessage(menu + "close...")
     endif
 EndEvent
 
@@ -251,7 +261,11 @@ Event OnMenuOpen(string menu)
 	elseif mcmOptions.noReading && menu == "Book Menu"
         ForceCloseMenu("Book Menu")
         notification("You cannot read.")
-	endif
+    ; elseif menu == "StatsMenu" || menu == "LevelUp Menu"
+    ;     ConsoleUtil.PrintMessage(menu + " open: player.level=" + player.GetLevel() + ", exp=" + Game.GetPlayerExperience() + ", perks=" + Game.GetPerkPoints())
+    ; else
+    ;     ConsoleUtil.PrintMessage(menu + " open...")
+    endif
 EndEvent
 
 
@@ -765,6 +779,12 @@ bool Function IsProhibitedItem(Form base)
 			return true
 		elseif mcmOptions.noShield && arm.IsShield()
 			return true
+		elseif mcmOptions.noHeadgear && IsHeadgear(arm)
+			return true
+		elseif mcmOptions.noFootwear && IsFootwear(arm)
+			return true
+		elseif mcmOptions.noJewelry && arm.IsJewelry()
+			return true
 		endif
 	elseif base as Spell
 		Spell sp = base as Spell
@@ -791,6 +811,19 @@ bool Function IsProhibitedItem(Form base)
         endif
 	endif
 	return false
+EndFunction
+
+
+bool Function IsFootwear (Armor arm)
+    int mask = Armor.GetMaskForSlot(37)
+    return Math.LogicalAnd(mask, arm.GetSlotMask())
+EndFunction
+
+
+bool Function IsHeadgear (Armor arm)
+    ; 31 = hair, 41 = longhair, 42 = circlet
+    int mask = Armor.GetMaskForSlot(31) + Armor.GetMaskForSlot(41) + Armor.GetMaskForSlot(42)
+    return Math.LogicalAnd(mask, arm.GetSlotMask())
 EndFunction
 
 

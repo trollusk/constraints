@@ -10,8 +10,8 @@
         <Variable Name="ModName" Value="Constraints" />
         <Variable Name="modpath" Value="c:\wabbajack\streamlinedskyrim\mods" />
         <Variable Name="gamepath" Value="C:\Steam\steamapps\common\Skyrim Special Edition" />
-        <!-- <Variable Name="modpath" Value="f:\wabbajack\streamlinedskyrim\mods" />
-        <Variable Name="gamepath" Value="f:\Steamlib\steamapps\common\Skyrim Special Edition" /> -->
+        <!-- <Variable Name="modpath" Value="f:\wabbajack\streamlinedskyrim\mods" /> -->
+        <!-- <Variable Name="gamepath" Value="f:\Steamlib\steamapps\common\Skyrim Special Edition" /> -->
     </Variables>
     <Imports>
         <Import>.\Source\Scripts</Import>
