@@ -8,22 +8,23 @@
     Final="false">
     <Variables>
         <Variable Name="ModName" Value="Constraints" />
+        <Variable Name="drive" Value="d:" />
         <!-- <Variable Name="modpath" Value="c:\wabbajack\streamlinedskyrim\mods" /> -->
         <!-- <Variable Name="gamepath" Value="C:\Steam\steamapps\common\Skyrim Special Edition" /> -->
-        <Variable Name="modpath" Value="f:\wabbajack\streamlinedskyrim\mods" />
-        <Variable Name="gamepath" Value="f:\Steamlib\steamapps\common\Skyrim Special Edition" />
+        <Variable Name="modpath" Value="\wabbajack\arisen\mods" />
+        <Variable Name="gamepath" Value="c:\Steam\steamapps\common\Skyrim Special Edition" />
     </Variables>
     <Imports>
         <Import>.\Source\Scripts</Import>
-        <Import>@modpath\skyui sdk\scripts\source</Import>
-        <Import>@modpath\skse64 - scripts\scripts\source</Import>
-        <Import>@modpath\PapyrusUtil SE - Modders Scripting Utility Functions\Scripts\Source</Import>
-        <Import>@modpath\Mfg Fix\source\scripts</Import>
-        <Import>@modpath\FileAccess Interface for Skyrim SE Scripts - FISSES\scripts\source</Import>
-        <Import>@modpath\ConsoleUtilSSE\source\scripts</Import>
-        <Import>@modpath\powerofthree's Papyrus Extender for SSE\source\scripts</Import>
-        <Import>@gamepath\Data\scripts\source</Import>
-        <Import>@modpath\JContainers SE\scripts\source</Import>
+        <Import>@drive@modpath\skyui\scripts\source</Import>
+        <Import>@drive@modpath\skse scripts\scripts\source</Import>
+        <Import>@drive@modpath\PapyrusUtil SE - Modders Scripting Utility Functions\Scripts\Source</Import>
+        <Import>@drive@modpath\Mfg Fix\source\scripts</Import>
+        <Import>@drive@modpath\FileAccess Interface for Skyrim SE Scripts - FISSES\scripts\source</Import>
+        <Import>@drive@modpath\ConsoleUtilSSE\scripts\source</Import>
+        <Import>@drive@modpath\powerofthree's Papyrus Extender\source\scripts</Import>
+        <Import>@gamepath\Data\source\scripts</Import>
+        <Import>@drive@modpath\JContainers SE\scripts\source</Import>
     </Imports>
     <Folders>
         <Folder>.\Source\Scripts</Folder>

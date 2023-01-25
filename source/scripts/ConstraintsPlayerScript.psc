@@ -59,12 +59,15 @@ bool property bookNamesHidden auto
 
 
 Event OnInit()
+    UnregisterForAllMenus()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")			; toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")	
+    RegisterForMenu("InventoryMenu")
+    ;RegisterForMenu("ContainerMenu")
 	RegisterForMenu("Book Menu")	
 	; RegisterForMenu("StatsMenu")            ; perk constellations
     ; RegisterForMenu("LevelUp Menu")
@@ -94,12 +97,15 @@ EndEvent
 ; OnPlayerLoadGame events can only be received by player/player alias
 
 Event OnPlayerLoadGame()
+    UnregisterForAllMenus()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
 	RegisterForMenu("BarterMenu")
 	RegisterForMenu("Training Menu")
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")
+    RegisterForMenu("InventoryMenu")
+    ;RegisterForMenu("ContainerMenu")	
 	RegisterForMenu("Book Menu")	
 	; RegisterForMenu("StatsMenu")
     ; RegisterForMenu("LevelUp Menu")
@@ -143,17 +149,27 @@ Event OnUpdate()
 			player.RemoveSpell(sunDamageSpell)
 		endif
 		RegisterForSingleUpdate(3.0)
-	elseif player.HasMagicEffect(burnInSunlightEffect)
-		player.DispelSpell(sunDamageSpell)
-		player.RemoveSpell(sunDamageSpell)
+	; elseif player.HasMagicEffect(burnInSunlightEffect)
+	; 	player.DispelSpell(sunDamageSpell)
+	; 	player.RemoveSpell(sunDamageSpell)
 	endif
 EndEvent
 
 
 Event OnMenuClose(string menu)
+    if menu == "InventoryMenu" || menu == "Journal Menu"
+        UnequipProhibitedItems()
+
+		if mcmOptions.goldCap > 0
+			StoreExcessGold()
+		elseif goldOverflow > 0
+			player.AddItem(goldBase, goldOverflow)
+			goldOverflow = 0
+		endif
+    endif
+
 	if menu == "Journal Menu"
 		; Runs after MCM closes
-		; Deal with immediate effects of any toggled options
 		
 		if mcmOptions.noSpeechcraft
 			AddSpellOnce(player, damageSpeech)
@@ -166,21 +182,12 @@ Event OnMenuClose(string menu)
 		endif
 		RegisterForKey(Input.GetMappedKey("Sneak"))
 		
-		UnequipProhibitedItems()
-
 		if mcmOptions.noFollow
 			MakeFollowersCowardly()
 		else
 			RestoreBraveFollowers()
 		endif
-		
-		if mcmOptions.goldCap > 0
-			StoreExcessGold()
-		elseif goldOverflow > 0
-			player.AddItem(goldBase, goldOverflow)
-			goldOverflow = 0
-		endif
-		
+				
 		if mcmOptions.noAlteration || mcmOptions.noConjuration || mcmOptions.noIllusion || mcmOptions.noDestruction || mcmOptions.noRestoration
 			int spellIndex = player.GetSpellCount()
 			knownSpells.Revert()
@@ -231,17 +238,21 @@ Event OnMenuOpen(string menu)
 	if mcmOptions.noLockpick && menu == "Lockpicking Menu"
 		notification("You may not pick locks.")
 		ForceCloseMenu("Lockpicking Menu")
-	
-	elseif lastFurniture && menu == "Crafting Menu" 
-		if mcmOptions.noEnchant && (lastFurniture.HasKeywordString("isEnchanting") || lastFurniture.HasKeywordString("WICraftingEnchanting"))
+	elseif menu == "Crafting Menu" 
+        Form station= lastFurniture
+        if !station
+            station = Game.GetCurrentCrosshairRef()
+        endif
+        Debug.Notification("opened crafting menu, station = " + station.GetName())
+		if mcmOptions.noEnchant && (station.HasKeywordString("isEnchanting") || station.HasKeywordString("WICraftingEnchanting"))
 			notification("You may not use enchanting stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
-		elseif mcmOptions.noAlchemy && (lastFurniture.HasKeywordString("isAlchemy") || lastFurniture.HasKeywordString("WICraftingAlchemy"))
+		elseif mcmOptions.noAlchemy && (station.HasKeywordString("isAlchemy") || station.HasKeywordString("WICraftingAlchemy"))
 			notification("You may not use alchemy stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
-		elseif mcmOptions.noSmith && IsSmithingStation(lastFurniture)
+		elseif mcmOptions.noSmith && IsSmithingStation(station)
 			notification("You may not use smithing stations.")
 			ForceCloseMenu("Crafting Menu")
 			player.moveto(player)
@@ -286,7 +297,6 @@ EndEvent
 
 
 Event OnObjectEquipped (Form base, ObjectReference ref)
-	
 	if !PO3_SKSEFunctions.IsQuestItem(ref)
 		if (base as Weapon) || (base as Armor) || (base as Ammo)
 			if IsProhibitedItem(base)
@@ -678,6 +688,9 @@ EndFunction
 
 
 bool Function IsProhibitedItem(Form base)
+    if PO3_SKSEFunctions.IsQuestItem(base as ObjectReference)
+        return false
+    endif
 	; first check materials
 	if (base as Weapon) || (base as Ammo)
 		if mcmOptions.noMaterialIron && base.HasKeywordString("WeapMaterialIron")
