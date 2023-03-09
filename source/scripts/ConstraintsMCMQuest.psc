@@ -7,6 +7,7 @@ bool property noOneHanded auto
 bool _onehanded
 bool property noTwoHanded auto
 bool property noRanged auto
+bool property weakRanged auto
 bool property noEdged auto
 bool Property noStaff Auto
 bool property noDagger auto
@@ -37,6 +38,7 @@ bool property noPickpocket auto
 bool property noBuy auto
 bool property noSell auto
 bool property noFollow auto
+bool property oneFollower auto
 bool property noShout auto
 bool property noPower auto
 bool property noTrain auto
@@ -75,11 +77,13 @@ bool property noMaterialWood auto		; weapon only
 
 FormList property cowardlyFollowers auto
 int[] property followerConfidence auto
+Spell property oneFollowerPower auto
 
 ; MCM option indices
 int iOneHanded
 int iTwoHanded
 int iRanged
+int iWeakRanged
 int iEdged
 int iStaff
 int iDagger
@@ -108,6 +112,7 @@ int iPickpocket
 int iBuy
 int iSell
 int iFollow
+int iOneFollower
 int iMaterialIron
 int iMaterialSteel
 int iMaterialDaedric
@@ -160,6 +165,7 @@ Event OnPageReset (string page)
 		iOneHanded = AddToggleOption("No one-handed weapons", _onehanded)
 		iTwoHanded = AddToggleOption("No two-handed weapons", noTwoHanded)
 		iRanged = AddToggleOption("No ranged weapons", noRanged)
+        iWeakRanged = AddToggleOption("Ranged weapons do minimal damage", weakRanged)
 		iEdged = AddToggleOption("No edged weapons", noEdged)
 		iStaff = AddToggleOption("No staves", noStaff)
 		iDagger = AddToggleOption("No daggers", noDagger)
@@ -239,8 +245,9 @@ Event OnPageReset (string page)
 	elseif page == "Misc." || page == "Misc"
 		iMap = AddToggleOption("No map", noMap)
 		iReading = AddToggleOption("Illiterate", noReading)
-		iFollow = AddToggleOption("No combat followers", noFollow)
 		iBurnInSunlight = AddToggleOption("Burn in sunlight", burnInSunlight)
+		iFollow = AddToggleOption("No combat followers", noFollow)
+        iOneFollower = AddToggleOption("Single combat follower", oneFollower)
 	endif
 EndEvent
 
@@ -256,6 +263,9 @@ Event OnOptionSelect (int option)
 	elseif option == iRanged
 		noRanged = !noRanged
 		SetToggleOptionValue(iRanged, noRanged)
+	elseif option == iWeakRanged
+		weakRanged = !weakRanged
+		SetToggleOptionValue(iWeakRanged, weakRanged)
 	elseif option == iEdged
 		noEdged = !noEdged
 		SetToggleOptionValue(iEdged, noEdged)
@@ -343,6 +353,14 @@ Event OnOptionSelect (int option)
 	elseif option == iFollow
 		noFollow = !noFollow
 		SetToggleOptionValue(iFollow, noFollow)
+	elseif option == iOneFollower
+		oneFollower = !oneFollower
+		SetToggleOptionValue(iOneFollower, oneFollower)
+        if oneFollower
+            player.AddSpell(oneFollowerPower, false)
+        else
+            player.RemoveSpell(oneFollowerPower)
+        endif
 	elseif option == iMaterialIron
 		noMaterialIron = !noMaterialIron
 		SetToggleOptionValue(iMaterialIron, noMaterialIron)
@@ -466,9 +484,11 @@ Event OnOptionHighlight(int option)
 	if option == iOneHanded
 		SetInfoText("Prevent yourself from equipping one-handed melee weapons.")
 	elseif option == iTwoHanded
-		SetInfoText("Prevent yourself from equipping two-handed melee weapons.")
+		SetInfoText("Prevent yourself from equipping two-handed melee weapons. This does not prevent equipping staves.")
 	elseif option == iRanged
 		SetInfoText("Prevent yourself from equipping ranged weapons.")
+	elseif option == iWeakRanged
+		SetInfoText("Make ranged weapons deal minimal damage. This way, they can still be used to attract enemies' attention, but are not useful sources of damage. Also allows utility arrows from mods to be used.")
 	elseif option == iEdged
 		SetInfoText("Prevent yourself from equipping edged weapons (daggers, swords, axes).")
 	elseif option == iStaff
@@ -527,6 +547,8 @@ Event OnOptionHighlight(int option)
 		SetInfoText("Prevent yourself from selling items to vendors.")
 	elseif option == iFollow
 		SetInfoText("Prevent followers from assisting you in combat.")
+	elseif option == iOneFollower
+		SetInfoText("Allow only a single follower to assist you in combat. You are granted a power to choose which follower takes this role, if you have multiple followers.")
 	elseif option == iMaterialIron
 		SetInfoText("Prevent yourself from using iron weapons or armor.")
 	elseif option == iMaterialSteel
