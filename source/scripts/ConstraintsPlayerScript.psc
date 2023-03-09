@@ -25,6 +25,7 @@ Spell property damageEnchanting auto
 Spell property sunDamageSpell auto
 MagicEffect property burnInSunlightEffect auto
 Perk property noPickpocketPerk auto
+Perk property weakRangedPerk auto
 
 Faction property factionStormcloaks auto
 Faction property factionLegion auto
@@ -47,6 +48,7 @@ Faction property EnemyOfDarkBrotherhood auto
 ; state
 Furniture lastFurniture = none			; used to remember furniture we interacted with in OnSit
 int MAX_FOLLOWERS = 100					; max number of followers whose confidence we will remember
+Actor property braveFollower auto       ; the follower who is excluded from "cowardly followers"
 string[] skillNames
 FormList property knownSpells auto
 Form property lastItemAddedBase auto	; base form of the last non-gold item acquired by the player
@@ -182,7 +184,13 @@ Event OnMenuClose(string menu)
 		endif
 		RegisterForKey(Input.GetMappedKey("Sneak"))
 		
-		if mcmOptions.noFollow
+        if mcmOptions.weakRanged
+            player.AddPerk(weakRangedPerk)
+        else
+            player.RemovePerk(weakRangedPerk)
+        endif
+
+		if mcmOptions.noFollow || mcmOptions.oneFollower
 			MakeFollowersCowardly()
 		else
 			RestoreBraveFollowers()
@@ -243,7 +251,7 @@ Event OnMenuOpen(string menu)
         if !station
             station = Game.GetCurrentCrosshairRef()
         endif
-        Debug.Notification("opened crafting menu, station = " + station.GetName())
+        ;Debug.Notification("opened crafting menu, station = " + station.GetName())
 		if mcmOptions.noEnchant && (station.HasKeywordString("isEnchanting") || station.HasKeywordString("WICraftingEnchanting"))
 			notification("You may not use enchanting stations.")
 			ForceCloseMenu("Crafting Menu")
@@ -290,7 +298,7 @@ EndEvent
 
 
 Event OnCombatStateChanged (Actor target, int combatState)
-	if mcmOptions.noFollow && combatState == 1
+	if (mcmOptions.noFollow || mcmOptions.oneFollower) && combatState == 1
 		MakeFollowersCowardly()
 	endif
 EndEvent
@@ -306,6 +314,8 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 			endif
 		elseif base as Spell
 			Spell sp = base as Spell
+            consoleutil.printmessage("Test if " + GetSpellSchool(sp) + " is prohibited school: " + IsProhibitedSchool(GetSpellSchool(sp)))
+
 			if IsProhibitedSchool(GetSpellSchool(sp))
 				notification("You may not equip that spell.")
 				if player.GetEquippedSpell(0) == sp
@@ -768,7 +778,8 @@ bool Function IsProhibitedItem(Form base)
 			return true
 		elseif mcmOptions.noOneHanded && (wpn.IsSword() || wpn.IsMace() || wpn.IsDagger() || wpn.IsWarAxe())
 			return true
-		elseif mcmOptions.noTwoHanded && (wpn.IsWarHammer() || wpn.IsBattleAxe() || wpn.IsGreatsword() || wpn.IsStaff())
+		elseif mcmOptions.noTwoHanded && (wpn.IsWarHammer() || wpn.IsBattleAxe() || wpn.IsGreatsword())
+            ; Even though Staves are technically 2H weapons, we handle them separately.
 			return true
 		elseif mcmOptions.noDagger && wpn.IsDagger()
 			return true
@@ -801,6 +812,7 @@ bool Function IsProhibitedItem(Form base)
 		endif
 	elseif base as Spell
 		Spell sp = base as Spell
+        consoleutil.printmessage("Test if " + GetSpellSchool(sp) + " is prohibited school: " + IsProhibitedSchool(GetSpellSchool(sp)))
 		if IsProhibitedSchool(GetSpellSchool(sp))
 			return true
 		elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
@@ -876,10 +888,15 @@ EndFunction
 Function MakeFollowersCowardly()
 	Actor[] followers = PO3_SKSEFunctions.GetPlayerFollowers()
 	int index = followers.Length
-	while index > 0
-		index -= 1
-		MakeFollowerCowardly(followers[index])
-	endwhile	
+    if !mcmOptions.oneFollower || index > 1
+        while index > 0
+            index -= 1
+            Actor follower = followers[index]
+            if !mcmOptions.oneFollower || follower != braveFollower
+                MakeFollowerCowardly(follower)
+            endif
+        endwhile	
+    endif
 EndFunction
 
 
@@ -898,24 +915,31 @@ EndFunction
 
 
 Function RestoreBraveFollowers()
-	Actor follower
-	int index = mcmOptions.cowardlyFollowers.GetSize()
-	while index > 0
-		index -= 1
-		follower = mcmOptions.cowardlyFollowers.GetAt(index) as Actor
-		int followerIndex = mcmOptions.cowardlyFollowers.Find(follower)
-		int confidence 
-		if followerIndex < MAX_FOLLOWERS
-			confidence = mcmOptions.followerConfidence[followerIndex]
-		endif
-		;consoleutil.printmessage("Restoring follower: " + follower.GetDisplayName())
-		if followerIndex < 0
-			;consoleutil.printmessage("Error: could not find Actor " + follower + "in follower formlist, using default confidence of 2")
-			confidence = 2
-		endif
-		follower.SetActorValue("confidence", confidence)
-	endwhile
-	mcmOptions.cowardlyFollowers.Revert()
+	Actor[] followers = PO3_SKSEFunctions.GetPlayerFollowers()
+	int index = followers.Length
+    while index > 0
+        index -= 1
+        Actor follower = followers[index]
+        follower.SetActorValue("confidence", follower.GetBaseActorValue("confidence"))
+    endwhile	
+	; Actor follower
+	; int index = mcmOptions.cowardlyFollowers.GetSize()
+	; while index > 0
+	; 	index -= 1
+	; 	follower = mcmOptions.cowardlyFollowers.GetAt(index) as Actor
+	; 	int followerIndex = mcmOptions.cowardlyFollowers.Find(follower)
+	; 	int confidence 
+	; 	if followerIndex < MAX_FOLLOWERS
+	; 		confidence = mcmOptions.followerConfidence[followerIndex]
+	; 	endif
+	; 	;consoleutil.printmessage("Restoring follower: " + follower.GetDisplayName())
+	; 	if followerIndex < 0
+	; 		;consoleutil.printmessage("Error: could not find Actor " + follower + "in follower formlist, using default confidence of 2")
+	; 		confidence = 2
+	; 	endif
+	; 	follower.SetActorValue("confidence", confidence)
+	; endwhile
+	; mcmOptions.cowardlyFollowers.Revert()
 EndFunction
 
 
