@@ -58,6 +58,9 @@ bool property hateVigilants auto
 bool property hateWinterholdCollege auto
 bool property hateDarkBrotherhood auto
 
+bool property onlyCastFavouritedSpells auto
+int property maxFavouriteSpellCount auto
+
 ; Materials
 bool property noMaterialIron auto
 bool property noMaterialSteel auto
@@ -147,6 +150,8 @@ int iDarkBrotherhood
 int iVigilants
 int iWHCollege
 
+int iOnlyCastFavouritedSpells
+int iMaxFavouritedSpells
 
 ; Event OnConfigInit()
 ; 	Pages = new string[5]
@@ -214,7 +219,11 @@ Event OnPageReset (string page)
 		AddEmptyOption()
 		iShout = AddToggleOption("No shouts", noShout)
         iPower = AddToggleOption("No powers", noPower)
-		AddEmptyOption()
+        SetCursorPosition(1)
+        AddHeaderOption("Spell slots")
+        iOnlyCastFavouritedSpells = AddToggleOption("May only cast favorited spells", onlyCastFavouritedSpells)
+        iMaxFavouritedSpells = AddSliderOption("Max number of favorited spells", maxFavouriteSpellCount)
+        AddEmptyOption()
 		AddHeaderOption("Crafting")
 		iAlchemy = AddToggleOption("No alchemy", noAlchemy)
 		iEnchant = AddToggleOption("No enchanting", noEnchant)
@@ -448,6 +457,9 @@ Event OnOptionSelect (int option)
 	elseif option == iWHCollege
 		hateWinterholdCollege = !hateWinterholdCollege
 		SetToggleOptionValue(iWHCollege, hateWinterholdCollege)
+	elseif option == iOnlyCastFavouritedSpells
+		onlyCastFavouritedSpells = !onlyCastFavouritedSpells
+		SetToggleOptionValue(iOnlyCastFavouritedSpells, onlyCastFavouritedSpells)
 	endif
 EndEvent
 
@@ -460,11 +472,16 @@ Event OnOptionSliderOpen (int option)
 		SetSliderDialogRange(0, 1000)
 		SetSliderDialogInterval(10)
 	elseif (option == iWeightCap)
-			SetSliderDialogStartValue(weightCap)
-			SetSliderDialogDefaultValue(0)
-			SetSliderDialogRange(0, 500)
-			SetSliderDialogInterval(5)
-		EndIf
+        SetSliderDialogStartValue(weightCap)
+        SetSliderDialogDefaultValue(0)
+        SetSliderDialogRange(0, 500)
+        SetSliderDialogInterval(5)
+	elseif (option == iMaxFavouritedSpells)
+        SetSliderDialogStartValue(maxFavouriteSpellCount)
+        SetSliderDialogDefaultValue(0)
+        SetSliderDialogRange(0, 20)
+        SetSliderDialogInterval(1)
+    EndIf
 EndEvent
 
 
@@ -475,6 +492,9 @@ Event OnOptionSliderAccept (int option, float value)
 	elseif (option == iWeightCap)
 		weightCap = value as int
 		SetSliderOptionValue(iWeightCap, weightCap)
+	elseif (option == iMaxFavouritedSpells)
+		maxFavouriteSpellCount = value as int
+		SetSliderOptionValue(iMaxFavouritedSpells, maxFavouriteSpellCount)
 	EndIf
 	ForcePageReset()
 EndEvent
@@ -611,6 +631,11 @@ Event OnOptionHighlight(int option)
 		SetInfoText("The Vigilants of Stendarr will attack you on sight. Will break quests!")
 	elseif option == iWHCollege
 		SetInfoText("Members of the College of Winterhold will attack you on sight. Will break quests!")
+	elseif option == iOnlyCastFavouritedSpells
+		SetInfoText("You may only cast spells that are favorited in your magic menu. If this option is selected, you will only be able to favorite and unfavorite spells when in a safe location such as a town or inn. This forces you to prepare for each adventure by selecting a subset of spells, rather than having all known spells available at all times.\nUse this along with the 'max favorited spells' option below to give yourself a limited number of spell slots.")
+	elseif option == iMaxFavouritedSpells
+		SetInfoText("You cannot favorite more than this many spells (0 = no limit). Use with the 'only cast favorited spells' option above, to give yourself a limited number of spell slots.")
 	endif
 EndEvent
+
 

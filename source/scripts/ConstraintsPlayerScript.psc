@@ -59,46 +59,26 @@ int property bookNames auto         ; JContainers ID of Form:string dictionary m
 bool property bookNamesHidden auto
 ;int property bookReadFlags auto
 
+Keyword Property innLocationKeyword  Auto  
+Keyword Property houseLocationKeyword  Auto     ; player home
+Keyword Property guildLocationKeyword  Auto 
+Keyword Property templeLocationKeyword  Auto 
+int favSpellCount = 0
+
 
 Event OnInit()
-    UnregisterForAllMenus()
-	RegisterForMenu("Lockpicking Menu")
-	RegisterForMenu("Crafting Menu")
-	RegisterForMenu("BarterMenu")
-	RegisterForMenu("Training Menu")
-	RegisterForMenu("Journal Menu")			; toplevel MCM/save/load/etc menu
-	RegisterForMenu("MapMenu")	
-    RegisterForMenu("InventoryMenu")
-    ;RegisterForMenu("ContainerMenu")
-	RegisterForMenu("Book Menu")	
-	; RegisterForMenu("StatsMenu")            ; perk constellations
-    ; RegisterForMenu("LevelUp Menu")
-    ; RegisterForMenu("MessageBoxMenu")
-	RegisterForKey(Input.GetMappedKey("Sneak"))
-	factionLegion.SetEnemy(EnemyOfLegion)
-	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
-	factionCompanions.SetEnemy(EnemyOfCompanions)
-	factionThalmor.SetEnemy(EnemyOfThalmor)
-	factionThievesGuild.SetEnemy(EnemyOfThievesGuild)
-	factionDarkBrotherhood.SetEnemy(EnemyOfDarkBrotherhood)
-	factionVigilants.SetEnemy(EnemyOfVigilants)
-	factionWinterholdCollege.SetEnemy(EnemyOfWinterholdCollege)
-	if mcmOptions.burnInSunlight
-		RegisterForSingleUpdate(3.0)
-	endif
-	InitSkillNames()
-    if bookNames == 0
-        bookNames = JFormMap.object()
-        JValue.retain(bookNames)
-        ;bookReadFlags = JFormMap.object()
-        ;JValue.retain(bookReadFlags)
-    endif
+    RegisterForEvents()
 EndEvent
 
 
 ; OnPlayerLoadGame events can only be received by player/player alias
 
 Event OnPlayerLoadGame()
+    RegisterForEvents()
+EndEvent
+
+
+function RegisterForEvents()
     UnregisterForAllMenus()
 	RegisterForMenu("Lockpicking Menu")
 	RegisterForMenu("Crafting Menu")
@@ -107,12 +87,14 @@ Event OnPlayerLoadGame()
 	RegisterForMenu("Journal Menu")					; the toplevel MCM/save/load/etc menu
 	RegisterForMenu("MapMenu")
     RegisterForMenu("InventoryMenu")
+    RegisterForMenu("MagicMenu")
     ;RegisterForMenu("ContainerMenu")	
 	RegisterForMenu("Book Menu")	
 	; RegisterForMenu("StatsMenu")
     ; RegisterForMenu("LevelUp Menu")
     ; RegisterForMenu("MessageBoxMenu")
 	RegisterForKey(Input.GetMappedKey("Sneak"))
+    RegisterForKey(Input.GetMappedKey("Toggle POV"))
 	factionLegion.SetEnemy(EnemyOfLegion)
 	factionStormcloaks.SetEnemy(EnemyOfStormcloaks)
 	factionCompanions.SetEnemy(EnemyOfCompanions)
@@ -131,7 +113,7 @@ Event OnPlayerLoadGame()
         ;bookReadFlags = JFormMap.object()
         ;JValue.retain(bookReadFlags)
     endif
-EndEvent
+endfunction
 
 
 Event OnUpdate()
@@ -159,7 +141,8 @@ EndEvent
 
 
 Event OnMenuClose(string menu)
-    if menu == "InventoryMenu" || menu == "Journal Menu"
+    consoleutil.printmessage("--menuclose " + menu)
+    if menu == "InventoryMenu" || menu == "Journal Menu" || menu == "MagicMenu"
         UnequipProhibitedItems()
 
 		if mcmOptions.goldCap > 0
@@ -246,6 +229,9 @@ Event OnMenuOpen(string menu)
 	if mcmOptions.noLockpick && menu == "Lockpicking Menu"
 		notification("You may not pick locks.")
 		ForceCloseMenu("Lockpicking Menu")
+    elseif menu == "MagicMenu"
+        favSpellCount = CountFavouritedSpells()
+        notification("Number of favourited spells: " + favSpellCount)
 	elseif menu == "Crafting Menu" 
         Form station= lastFurniture
         if !station
@@ -293,6 +279,43 @@ Event OnKeyDown(int keycode)
 		if mcmOptions.noStealth
 			StopSneaking()
 		endif
+    ElseIf (keycode == Input.GetMappedKey("Toggle POV"))        ; also the "mark as favourite" key
+        ; returns the currently selected item/spell in a menu, as a form
+        ; change "MagicMenu" to "InventoryMenu" if working with player inventory
+        Form selected = Game.GetFormEx(UI.GetInt("MagicMenu", "_root.Menu_mc.inventoryLists.itemList.selectedEntry.formId"))
+        Spell sp = selected as Spell
+        consoleutil.printmessage("Pressed favourite key, MagicMenu = " + UI.IsMenuOpen("MagicMenu") + ", form: " + selected.GetName())
+
+        if mcmOptions.onlyCastFavouritedSpells && UI.IsMenuOpen("MagicMenu")
+            consoleutil.printmessage("Pressed favourite key on '" + selected.GetName() + "' (fav:" + Game.IsObjectFavorited(selected) + ") in MagicMenu")
+            if !SafeLocation(player.GetCurrentLocation())
+                ; disallow fiddling with favourited spells when not in safe place
+                MessageBox("To favorite and unfavorite spells, you must be\n in a safe location such as an inn, guild, or player home.")
+                if sp
+                    PO3_SKSEFunctions.UnmarkItemAsFavorite(sp)
+                endif
+                return
+            endif
+
+            if !IsTrueSpell(sp)
+                consoleutil.printmessage("Not a true spell, ignoring")
+                return      ; we only care about true spells, not powers or shouts
+            elseif Game.IsObjectFavorited(sp)
+                if (mcmOptions.maxFavouriteSpellCount > 0) && (favSpellCount >= mcmOptions.maxFavouriteSpellCount)
+                    PO3_SKSEFunctions.UnmarkItemAsFavorite(sp)
+                    notification("You cannot favorite any more spells (" + favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + " favorited).")
+                    ForceRefreshMagicMenu()
+                else
+                    favSpellCount += 1
+                    notification(favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + "spells favorited.")
+                    ForceRefreshMagicMenu()
+                endif
+            else    ; unfavourited
+                favSpellCount -= 1
+                notification(favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + "spells favorited.")
+                ForceRefreshMagicMenu()
+            endif
+        endif
 	endif
 EndEvent
 
@@ -315,30 +338,28 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 		elseif base as Spell
 			Spell sp = base as Spell
             consoleutil.printmessage("Test if " + GetSpellSchool(sp) + " is prohibited school: " + IsProhibitedSchool(GetSpellSchool(sp)))
-
-			if IsProhibitedSchool(GetSpellSchool(sp))
-				notification("You may not equip that spell.")
-				if player.GetEquippedSpell(0) == sp
-					player.UnequipSpell(sp, 0)
-				endif
-				if player.GetEquippedSpell(1) == sp
-					player.UnequipSpell(sp, 1)
-				endif
-				if player.GetEquippedSpell(2) == sp
-					player.UnequipSpell(sp, 2)
-				endif
-				ForceCloseMenu("MagicMenu")
-			elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
-				notification("You may not equip powers.")
-				player.UnequipSpell(player.GetEquippedSpell(2), 2)
-				ForceCloseMenu("MagicMenu")
+            
+            if IsTrueSpell(sp)
+                if (mcmOptions.onlyCastFavouritedSpells) && (!Game.IsObjectFavorited(sp))
+                    notification("You may only cast favourited spells.")
+                    UnequipSpellFromAllSlots(sp)
+                    ForceRefreshMagicMenu()
+                elseif IsProhibitedSchool(GetSpellSchool(sp))
+                    notification("You may not equip that spell.")
+                    UnequipSpellFromAllSlots(sp)
+                    ForceRefreshMagicMenu()
+                endif
+			elseif mcmOptions.noPower && IsPower(sp)   ;player.GetEquippedSpell(2) == sp
+				notification("You may not use powers.")
+				UnequipSpellFromAllSlots(sp)
+				ForceRefreshMagicMenu()
 			endif
 		elseif base as Shout
 			Shout sh = base as Shout
 			if mcmOptions.noShout
-    			notification("You may not equip shouts.")
+    			notification("You may not use shouts.")
 				player.UnequipShout(sh)
-				ForceCloseMenu("MagicMenu")
+				ForceRefreshMagicMenu()
 			endif
 		elseif base as Book
 			Book bk = Base as book
@@ -664,6 +685,13 @@ Function ForceRefreshInventoryMenu()
 EndFunction
 
 
+Function ForceRefreshMagicMenu()
+	player.AddSpell(spellToken, false)
+	Utility.Wait(0.1)
+	player.RemoveSpell(spellToken)
+EndFunction
+
+
 Function StopSneaking()
 	if player.IsSneaking()
 		notification("You may not sneak.")
@@ -674,6 +702,7 @@ EndFunction
 
 Function UnequipProhibitedItems()
 	Form[] items = PO3_SKSEFunctions.AddAllEquippedItemsToArray(player)
+    consoleutil.printmessage("--unequip prohibited items")
 	;consoleutil.printmessage("Got list of " + items.Length + " equipped items")
 	int index = 0
 	while index < items.Length
@@ -689,9 +718,12 @@ Function UnequipProhibitedItems()
 	int hand = 0
 	while hand < 3
 		Spell sp = player.GetEquippedSpell(hand)
-		if sp && IsProhibitedItem(sp)
-			player.UnequipSpell(sp, hand)
-		endif
+        if sp
+            consoleutil.printmessage("Spell in hand " + hand + " = " + sp.GetName())
+            if sp && IsProhibitedItem(sp)
+                UnequipSpellFromAllSlots(sp)
+            endif
+        endif
 		hand += 1
 	endwhile
 EndFunction
@@ -812,9 +844,12 @@ bool Function IsProhibitedItem(Form base)
 		endif
 	elseif base as Spell
 		Spell sp = base as Spell
-        consoleutil.printmessage("Test if " + GetSpellSchool(sp) + " is prohibited school: " + IsProhibitedSchool(GetSpellSchool(sp)))
+        consoleutil.printmessage("Spell " + sp.GetName() + " type: " + PO3_SKSEFunctions.GetSpellType(sp) + " favd: " + Game.IsObjectFavorited(sp))
+        consoleutil.printmessage("  school: " + GetSpellSchool(sp))
 		if IsProhibitedSchool(GetSpellSchool(sp))
 			return true
+        elseif mcmOptions.onlyCastFavouritedSpells && IsTrueSpell(sp) && !Game.IsObjectFavorited(sp)
+            return true
 		elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
 			return true
 		endif
@@ -850,6 +885,24 @@ bool Function IsHeadgear (Armor arm)
     int mask = Armor.GetMaskForSlot(31) + Armor.GetMaskForSlot(41) + Armor.GetMaskForSlot(42)
     return Math.LogicalAnd(mask, arm.GetSlotMask())
 EndFunction
+
+
+; 2 - power
+; 3 - lesser power
+; 4 - ability
+; 11 - shout
+bool function IsPower (Spell sp)
+    int sptype = PO3_SKSEFunctions.GetSpellType(sp)
+    return (sptype == 2) || (sptype == 3)
+endfunction
+
+
+; 0 - spell
+; 9 - leveled spell
+bool function IsTrueSpell (Spell sp)
+    int sptype = PO3_SKSEFunctions.GetSpellType(sp)
+    return (sptype == 0) || (sptype == 9)
+endfunction
 
 
 bool Function FactionHatesPlayer(Faction fac)
@@ -983,6 +1036,43 @@ Function RestoreBookNames()
     bookNamesHidden = false
 EndFunction
 
+
+bool Function SafeLocation(Location loc)
+    if loc.HasKeyword(innLocationKeyword) || loc.HasKeyword(houseLocationKeyword) || loc.HasKeyword(guildLocationKeyword) || loc.HasKeyword(templeLocationKeyword)
+        return true
+    else
+        return false
+    endif
+EndFunction
+
+
+int Function CountFavouritedSpells()
+    int numSpells = player.GetSpellCount()
+    int numFav = 0
+    int index = 0
+    while index < numSpells
+        Spell spl = player.GetNthSpell(index) as Spell
+        if IsTrueSpell(sp) && Game.IsObjectFavorited(spl)
+            numFav += 1
+        endif
+        index += 1
+    endwhile
+    return numFav
+EndFunction
+
+
+function UnequipSpellFromAllSlots(Spell sp)
+    if player.GetEquippedSpell(0) == sp
+        player.UnequipSpell(sp, 0)
+    endif
+    if player.GetEquippedSpell(1) == sp
+        player.UnequipSpell(sp, 1)
+    endif
+    if player.GetEquippedSpell(2) == sp
+        player.UnequipSpell(sp, 2)
+    endif
+    notification(sp.GetName() + " unequipped.")
+endfunction
 
 
 ; Function SavePlayerSkills()

@@ -12,6 +12,7 @@
         <!-- <Variable Name="modpath" Value="c:\wabbajack\streamlinedskyrim\mods" /> -->
         <!-- <Variable Name="gamepath" Value="C:\Steam\steamapps\common\Skyrim Special Edition" /> -->
         <Variable Name="modpath" Value="\wabbajack\arisen\mods" />
+        <!-- <Variable Name="gamepath" Value="c:\Steam\steamapps\common\Skyrim Special Edition" /> -->
         <Variable Name="gamepath" Value="c:\Steam\steamapps\common\Skyrim Special Edition" />
     </Variables>
     <Imports>
