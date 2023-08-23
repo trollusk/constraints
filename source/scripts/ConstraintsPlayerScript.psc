@@ -63,7 +63,11 @@ Keyword Property innLocationKeyword  Auto
 Keyword Property houseLocationKeyword  Auto     ; player home
 Keyword Property guildLocationKeyword  Auto 
 Keyword Property templeLocationKeyword  Auto 
-int favSpellCount = 0
+
+Spell[] property slottedSpells auto     ; contains all slotted spells
+; int favSpellCount = 0
+int spellSlots = 0
+; Spell[] favSpells
 
 
 Event OnInit()
@@ -104,7 +108,7 @@ function RegisterForEvents()
 	factionVigilants.SetEnemy(EnemyOfVigilants)
 	factionWinterholdCollege.SetEnemy(EnemyOfWinterholdCollege)
 	if mcmOptions.burnInSunlight
-		RegisterForSingleUpdate(3.0)
+		RegisterForSingleUpdate(1.5)
 	endif
 	InitSkillNames()
     if bookNames == 0
@@ -117,7 +121,7 @@ endfunction
 
 
 Event OnUpdate()
-	; runs every 3s
+	; runs every 1.5s
 
 	if mcmOptions.burnInSunlight
 		if !player.IsInInterior() && Game.GetSunPositionZ() > 0
@@ -132,11 +136,20 @@ Event OnUpdate()
 			player.DispelSpell(sunDamageSpell)
 			player.RemoveSpell(sunDamageSpell)
 		endif
-		RegisterForSingleUpdate(3.0)
-	; elseif player.HasMagicEffect(burnInSunlightEffect)
-	; 	player.DispelSpell(sunDamageSpell)
-	; 	player.RemoveSpell(sunDamageSpell)
 	endif
+
+	; There is no 'OnEquipped' event for spells. So unfortunately we need to poll constantly.
+	; hand 0=right, 1=left, 2=neither (powers, shouts)
+	int hand = 0
+	while hand < 3
+		Spell sp = player.GetEquippedSpell(hand)
+        if sp && IsProhibitedItem(sp)
+            UnequipSpellFromAllSlots(sp)
+        endif
+		hand += 1
+	endwhile
+
+    RegisterForSingleUpdate(1.5)
 EndEvent
 
 
@@ -229,9 +242,6 @@ Event OnMenuOpen(string menu)
 	if mcmOptions.noLockpick && menu == "Lockpicking Menu"
 		notification("You may not pick locks.")
 		ForceCloseMenu("Lockpicking Menu")
-    elseif menu == "MagicMenu"
-        favSpellCount = CountFavouritedSpells()
-        notification("Number of favourited spells: " + favSpellCount)
 	elseif menu == "Crafting Menu" 
         Form station= lastFurniture
         if !station
@@ -279,43 +289,44 @@ Event OnKeyDown(int keycode)
 		if mcmOptions.noStealth
 			StopSneaking()
 		endif
-    ElseIf (keycode == Input.GetMappedKey("Toggle POV"))        ; also the "mark as favourite" key
-        ; returns the currently selected item/spell in a menu, as a form
-        ; change "MagicMenu" to "InventoryMenu" if working with player inventory
-        Form selected = Game.GetFormEx(UI.GetInt("MagicMenu", "_root.Menu_mc.inventoryLists.itemList.selectedEntry.formId"))
-        Spell sp = selected as Spell
-        consoleutil.printmessage("Pressed favourite key, MagicMenu = " + UI.IsMenuOpen("MagicMenu") + ", form: " + selected.GetName())
+    ; ElseIf (keycode == Input.GetMappedKey("Toggle POV"))        ; also the "mark as favourite" key
 
-        if mcmOptions.onlyCastFavouritedSpells && UI.IsMenuOpen("MagicMenu")
-            consoleutil.printmessage("Pressed favourite key on '" + selected.GetName() + "' (fav:" + Game.IsObjectFavorited(selected) + ") in MagicMenu")
-            if !SafeLocation(player.GetCurrentLocation())
-                ; disallow fiddling with favourited spells when not in safe place
-                MessageBox("To favorite and unfavorite spells, you must be\n in a safe location such as an inn, guild, or player home.")
-                if sp
-                    PO3_SKSEFunctions.UnmarkItemAsFavorite(sp)
-                endif
-                return
-            endif
+    ;     if mcmOptions.onlyCastFavouritedSpells && UI.IsMenuOpen("MagicMenu")
+    ;         ; returns the currently selected item/spell in a menu, as a form
+    ;         ; change "MagicMenu" to "InventoryMenu" if working with player inventory
+    ;         Form selected = Game.GetFormEx(UI.GetInt("MagicMenu", "_root.Menu_mc.inventoryLists.itemList.selectedEntry.formId"))
+    ;         Spell sp = selected as Spell
+    ;         consoleutil.printmessage("Pressed favourite key on '" + selected.GetName() + "' (fav:" + Game.IsObjectFavorited(selected) + ") in MagicMenu")
+    ;         if !SafeLocation(player.GetCurrentLocation())
+    ;             ; disallow fiddling with favourited spells when not in safe place
+    ;             MessageBox("To favorite and unfavorite spells, you must be\n in a safe location such as an inn, guild, or player home.")
+    ;             RevertToFavouriteSpellList()
+    ;             return
+    ;         endif
 
-            if !IsTrueSpell(sp)
-                consoleutil.printmessage("Not a true spell, ignoring")
-                return      ; we only care about true spells, not powers or shouts
-            elseif Game.IsObjectFavorited(sp)
-                if (mcmOptions.maxFavouriteSpellCount > 0) && (favSpellCount >= mcmOptions.maxFavouriteSpellCount)
-                    PO3_SKSEFunctions.UnmarkItemAsFavorite(sp)
-                    notification("You cannot favorite any more spells (" + favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + " favorited).")
-                    ForceRefreshMagicMenu()
-                else
-                    favSpellCount += 1
-                    notification(favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + "spells favorited.")
-                    ForceRefreshMagicMenu()
-                endif
-            else    ; unfavourited
-                favSpellCount -= 1
-                notification(favSpellCount + "/" + mcmOptions.maxFavouriteSpellCount + "spells favorited.")
-                ForceRefreshMagicMenu()
-            endif
-        endif
+    ;         if !IsTrueSpell(sp)
+    ;             consoleutil.printmessage("Not a true spell, ignoring")
+    ;             return      ; we only care about true spells, not powers or shouts
+    ;         elseif Game.IsObjectFavorited(sp)
+    ;             spellSlots = CalculateSpellSlots()
+    ;             if (spellSlots > 0) && (favSpellCount >= spellSlots)
+    ;                 PO3_SKSEFunctions.UnmarkItemAsFavorite(sp)
+    ;                 notification("You cannot favorite any more spells (" + favSpellCount + "/" + spellSlots + " favorited).")
+    ;                 RevertToFavouriteSpellList()
+    ;                 ForceRefreshMagicMenu()
+    ;             else
+    ;                 favSpellCount += 1
+    ;                 notification(favSpellCount + "/" + spellSlots + "spells favorited.")
+    ;                 UpdateFavouriteSpellList()
+    ;                 ForceRefreshMagicMenu()
+    ;             endif
+    ;         else    ; unfavourited
+    ;             favSpellCount -= 1
+    ;             notification(favSpellCount + "/" + spellSlots + "spells favorited.")
+    ;             UpdateFavouriteSpellList()
+    ;             ForceRefreshMagicMenu()
+    ;         endif
+    ;     endif
 	endif
 EndEvent
 
@@ -336,15 +347,19 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 				ForceRefreshInventoryMenu()
 			endif
 		elseif base as Spell
+            ; unfortunately OnObjectEquipped seems not to work with spells/powers.
+            ; therefore this section probably never gets called.
+            ; to be safe we repeatedly poll the player in OnUpdate to see if they are wielding a prohibited spell.
+
 			Spell sp = base as Spell
             consoleutil.printmessage("Test if " + GetSpellSchool(sp) + " is prohibited school: " + IsProhibitedSchool(GetSpellSchool(sp)))
             
             if IsTrueSpell(sp)
-                if (mcmOptions.onlyCastFavouritedSpells) && (!Game.IsObjectFavorited(sp))
-                    notification("You may only cast favourited spells.")
-                    UnequipSpellFromAllSlots(sp)
-                    ForceRefreshMagicMenu()
-                elseif IsProhibitedSchool(GetSpellSchool(sp))
+                ; if (mcmOptions.onlyCastFavouritedSpells) && (!Game.IsObjectFavorited(sp))
+                ;     notification("You may only cast favourited spells.")
+                ;     UnequipSpellFromAllSlots(sp)
+                ;     ForceRefreshMagicMenu()
+                if IsProhibitedSchool(GetSpellSchool(sp))
                     notification("You may not equip that spell.")
                     UnequipSpellFromAllSlots(sp)
                     ForceRefreshMagicMenu()
@@ -355,6 +370,7 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
 				ForceRefreshMagicMenu()
 			endif
 		elseif base as Shout
+            ; see above - probably never gets called.
 			Shout sh = base as Shout
 			if mcmOptions.noShout
     			notification("You may not use shouts.")
@@ -687,8 +703,9 @@ EndFunction
 
 Function ForceRefreshMagicMenu()
 	player.AddSpell(spellToken, false)
-	Utility.Wait(0.1)
+	Utility.Wait(0.25)
 	player.RemoveSpell(spellToken)
+    UI.invokeBool("MagicMenu", "_global.skyui.components.list.ListLayout.Refresh", true)
 EndFunction
 
 
@@ -844,11 +861,12 @@ bool Function IsProhibitedItem(Form base)
 		endif
 	elseif base as Spell
 		Spell sp = base as Spell
-        consoleutil.printmessage("Spell " + sp.GetName() + " type: " + PO3_SKSEFunctions.GetSpellType(sp) + " favd: " + Game.IsObjectFavorited(sp))
-        consoleutil.printmessage("  school: " + GetSpellSchool(sp))
+        consoleutil.printmessage("Check if spell is prohibited:")
+        consoleutil.printmessage("  name: " + sp.GetName() + " type: " + PO3_SKSEFunctions.GetSpellType(sp) + " fav:" + Game.IsObjectFavorited(sp))
+        consoleutil.printmessage("  school: " + GetSpellSchool(sp) + ", trueSpell:" + IsTrueSpell(sp) + ", slotted:" + SpellIsSlotted(sp))
 		if IsProhibitedSchool(GetSpellSchool(sp))
 			return true
-        elseif mcmOptions.onlyCastFavouritedSpells && IsTrueSpell(sp) && !Game.IsObjectFavorited(sp)
+        elseif mcmOptions.useSpellSlots && IsTrueSpell(sp) && !SpellIsSlotted(sp)
             return true
 		elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
 			return true
@@ -897,8 +915,8 @@ bool function IsPower (Spell sp)
 endfunction
 
 
-; 0 - spell
-; 9 - leveled spell
+; Return true if the "spell" is a true spell belonging to one of the schools of magic, rather than
+; a shout, power, disease, etc.
 bool function IsTrueSpell (Spell sp)
     int sptype = PO3_SKSEFunctions.GetSpellType(sp)
     return (sptype == 0) || (sptype == 9)
@@ -975,24 +993,6 @@ Function RestoreBraveFollowers()
         Actor follower = followers[index]
         follower.SetActorValue("confidence", follower.GetBaseActorValue("confidence"))
     endwhile	
-	; Actor follower
-	; int index = mcmOptions.cowardlyFollowers.GetSize()
-	; while index > 0
-	; 	index -= 1
-	; 	follower = mcmOptions.cowardlyFollowers.GetAt(index) as Actor
-	; 	int followerIndex = mcmOptions.cowardlyFollowers.Find(follower)
-	; 	int confidence 
-	; 	if followerIndex < MAX_FOLLOWERS
-	; 		confidence = mcmOptions.followerConfidence[followerIndex]
-	; 	endif
-	; 	;consoleutil.printmessage("Restoring follower: " + follower.GetDisplayName())
-	; 	if followerIndex < 0
-	; 		;consoleutil.printmessage("Error: could not find Actor " + follower + "in follower formlist, using default confidence of 2")
-	; 		confidence = 2
-	; 	endif
-	; 	follower.SetActorValue("confidence", confidence)
-	; endwhile
-	; mcmOptions.cowardlyFollowers.Revert()
 EndFunction
 
 
@@ -1046,19 +1046,67 @@ bool Function SafeLocation(Location loc)
 EndFunction
 
 
-int Function CountFavouritedSpells()
-    int numSpells = player.GetSpellCount()
-    int numFav = 0
-    int index = 0
-    while index < numSpells
-        Spell spl = player.GetNthSpell(index) as Spell
-        if IsTrueSpell(sp) && Game.IsObjectFavorited(spl)
-            numFav += 1
+bool function SpellIsSlotted(Spell sp)
+    return (slottedSpells.Find(sp) > 0)
+endfunction
+
+
+; int Function CountFavouritedSpells()
+;     int numSpells = player.GetSpellCount()
+;     int numFav = 0
+;     int index = 0
+;     while index < numSpells
+;         Spell spl = player.GetNthSpell(index) as Spell
+;         if IsTrueSpell(spl) && Game.IsObjectFavorited(spl)
+;             numFav += 1
+;         endif
+;         index += 1
+;     endwhile
+;     return numFav
+; EndFunction
+
+
+float function greater(float a, float b)
+    if a > b
+        return a
+    else
+        return b
+    endif
+endfunction
+
+
+float function HighestSpellSkill()
+    float skl = player.GetActorValue("Alteration")
+    skl = greater(skl, player.GetActorValue("Conjuration"))
+    skl = greater(skl, player.GetActorValue("Destruction"))
+    skl = greater(skl, player.GetActorValue("Illusion"))
+    skl = greater(skl, player.GetActorValue("Restoration"))
+    return skl
+endfunction
+
+
+int function CalculateSpellSlots()
+    if mcmOptions.spellSlotsScaleWithMagicSkill
+        float highestSkill = HighestSpellSkill()
+        if highestSkill >= 100
+            return 9
+        elseif highestSkill >= 80
+            return 8
+        elseif highestSkill >= 60
+            return 7
+        elseif highestSkill >= 45
+            return 6
+        elseif highestSkill >= 30
+            return 5
+        elseif highestSkill >= 20
+            return 4
+        else
+            return 3
         endif
-        index += 1
-    endwhile
-    return numFav
-EndFunction
+    else
+        return mcmOptions.numSpellSlots
+    endif
+endfunction
 
 
 function UnequipSpellFromAllSlots(Spell sp)
@@ -1073,6 +1121,55 @@ function UnequipSpellFromAllSlots(Spell sp)
     endif
     notification(sp.GetName() + " unequipped.")
 endfunction
+
+
+function AssignSpellToSlot(Spell sp, int slot)
+    if slot >= 0 && slot < slottedSpells.Length
+        slottedSpells[slot] = sp
+    endif
+endfunction
+
+
+; function UpdateFavouriteSpellList()
+;     favSpells = new Spell[50]
+;     int numSpells = player.GetSpellCount()
+;     int favIndex = 0
+;     int index = 0
+;     while index < numSpells
+;         Spell spl = player.GetNthSpell(index) as Spell
+;         if IsTrueSpell(spl) && Game.IsObjectFavorited(spl)
+;             favSpells[favIndex] = spl
+;             favIndex += 1
+;             if favIndex >= 50
+;                 return
+;             endif
+;         endif
+;         index += 1
+;     endwhile
+; endfunction
+
+
+; function RevertToFavouriteSpellList()
+;     int numSpells = player.GetSpellCount()
+;     int favIndex = 0
+;     int index = 0
+;     while index < numSpells
+;         Spell spl = player.GetNthSpell(index) as Spell
+;         if IsTrueSpell(spl)
+;             if Game.IsObjectFavorited(spl) 
+;                 if favSpells.Find(spl) < 0       ; not in favourites list
+;                     PO3_SKSEFunctions.UnmarkItemAsFavorite(spl)
+;                 endif
+;             else    ; not currently favourited
+;                 if favSpells.Find(spl) >= 0       ; is on favourites list
+;                     PO3_SKSEFunctions.MarkItemAsFavorite(spl)
+;                 endif
+;             endif
+;         endif
+;         index += 1
+;     endwhile
+; endfunction
+
 
 
 ; Function SavePlayerSkills()

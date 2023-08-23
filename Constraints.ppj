@@ -24,6 +24,7 @@
         <Import>@drive@modpath\FileAccess Interface for Skyrim SE Scripts - FISSES\scripts\source</Import>
         <Import>@drive@modpath\ConsoleUtilSSE\scripts\source</Import>
         <Import>@drive@modpath\powerofthree's Papyrus Extender\source\scripts</Import>
+        <Import>@modpath\UIExtensions\scripts\source</Import>
         <Import>@gamepath\Data\source\scripts</Import>
         <Import>@drive@modpath\JContainers SE\scripts\source</Import>
     </Imports>

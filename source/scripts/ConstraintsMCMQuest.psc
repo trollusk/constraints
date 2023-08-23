@@ -58,8 +58,11 @@ bool property hateVigilants auto
 bool property hateWinterholdCollege auto
 bool property hateDarkBrotherhood auto
 
-bool property onlyCastFavouritedSpells auto
-int property maxFavouriteSpellCount auto
+bool property useSpellSlots auto
+int property numSpellSlots auto
+bool property spellSlotsScaleWithMagicSkill auto
+Spell property changeSlotsPower auto
+int MAX_SLOTTED_SPELLS = 20
 
 ; Materials
 bool property noMaterialIron auto
@@ -150,8 +153,9 @@ int iDarkBrotherhood
 int iVigilants
 int iWHCollege
 
-int iOnlyCastFavouritedSpells
-int iMaxFavouritedSpells
+int iUseSpellSlots
+int iNumSpellSlots
+int iSlotsScaleWithMagicSkill
 
 ; Event OnConfigInit()
 ; 	Pages = new string[5]
@@ -221,8 +225,9 @@ Event OnPageReset (string page)
         iPower = AddToggleOption("No powers", noPower)
         SetCursorPosition(1)
         AddHeaderOption("Spell slots")
-        iOnlyCastFavouritedSpells = AddToggleOption("May only cast favorited spells", onlyCastFavouritedSpells)
-        iMaxFavouritedSpells = AddSliderOption("Max number of favorited spells", maxFavouriteSpellCount)
+        iUseSpellSlots = AddToggleOption("May only cast slotted spells", useSpellSlots)
+        iSlotsScaleWithMagicSkill = AddToggleOption("Gain spell slots as magic skill increases", spellSlotsScaleWithMagicSkill)
+        iNumSpellSlots = AddSliderOption("Number of available spell slots", numSpellSlots)
         AddEmptyOption()
 		AddHeaderOption("Crafting")
 		iAlchemy = AddToggleOption("No alchemy", noAlchemy)
@@ -457,9 +462,19 @@ Event OnOptionSelect (int option)
 	elseif option == iWHCollege
 		hateWinterholdCollege = !hateWinterholdCollege
 		SetToggleOptionValue(iWHCollege, hateWinterholdCollege)
-	elseif option == iOnlyCastFavouritedSpells
-		onlyCastFavouritedSpells = !onlyCastFavouritedSpells
-		SetToggleOptionValue(iOnlyCastFavouritedSpells, onlyCastFavouritedSpells)
+	elseif option == iUseSpellSlots
+		useSpellSlots = !useSpellSlots
+		SetToggleOptionValue(iUseSpellSlots, useSpellSlots)
+        if useSpellSlots
+            player.AddSpell(changeSlotsPower, false)
+        else
+            player.RemoveSpell(changeSlotsPower)
+        endif
+        ForcePageReset()
+	elseif option == iSlotsScaleWithMagicSkill
+		spellSlotsScaleWithMagicSkill = !spellSlotsScaleWithMagicSkill
+		SetToggleOptionValue(iSlotsScaleWithMagicSkill, spellSlotsScaleWithMagicSkill)
+        ForcePageReset()
 	endif
 EndEvent
 
@@ -476,8 +491,9 @@ Event OnOptionSliderOpen (int option)
         SetSliderDialogDefaultValue(0)
         SetSliderDialogRange(0, 500)
         SetSliderDialogInterval(5)
-	elseif (option == iMaxFavouritedSpells)
-        SetSliderDialogStartValue(maxFavouriteSpellCount)
+	elseif (option == iNumSpellSlots)
+        ConsoleUtil.PrintMessage("setting numSpellSlots, startval = " + numSpellSlots)
+        SetSliderDialogStartValue(numSpellSlots)
         SetSliderDialogDefaultValue(0)
         SetSliderDialogRange(0, 20)
         SetSliderDialogInterval(1)
@@ -492,9 +508,9 @@ Event OnOptionSliderAccept (int option, float value)
 	elseif (option == iWeightCap)
 		weightCap = value as int
 		SetSliderOptionValue(iWeightCap, weightCap)
-	elseif (option == iMaxFavouritedSpells)
-		maxFavouriteSpellCount = value as int
-		SetSliderOptionValue(iMaxFavouritedSpells, maxFavouriteSpellCount)
+	elseif (option == iNumSpellSlots)
+		numSpellSlots = value as int
+		SetSliderOptionValue(iNumSpellSlots, numSpellSlots)
 	EndIf
 	ForcePageReset()
 EndEvent
@@ -631,11 +647,13 @@ Event OnOptionHighlight(int option)
 		SetInfoText("The Vigilants of Stendarr will attack you on sight. Will break quests!")
 	elseif option == iWHCollege
 		SetInfoText("Members of the College of Winterhold will attack you on sight. Will break quests!")
-	elseif option == iOnlyCastFavouritedSpells
-		SetInfoText("You may only cast spells that are favorited in your magic menu. If this option is selected, you will only be able to favorite and unfavorite spells when in a safe location such as a town or inn. This forces you to prepare for each adventure by selecting a subset of spells, rather than having all known spells available at all times.\nUse this along with the 'max favorited spells' option below to give yourself a limited number of spell slots.")
-	elseif option == iMaxFavouritedSpells
-		SetInfoText("You cannot favorite more than this many spells (0 = no limit). Use with the 'only cast favorited spells' option above, to give yourself a limited number of spell slots.")
-	endif
+	elseif option == iUseSpellSlots
+		SetInfoText("You may only cast spells that you have slotted beforehand. You will receive a power that allows you to choose which spells to slot. The power can only be used in safe locations such as inns, temples and player homes. Use ONE of the options below to set the number of available slots.")
+	elseif option == iNumSpellSlots
+		SetInfoText("The number of available spell slots (0 = unlimited). Only applies if spell slot option has been activated (above), and the option to scale slots with magic skill has not been chosen.")
+    elseif option == iSlotsScaleWithMagicSkill
+		SetInfoText("The number of available spell slots starts at 3 for a character with no magic skill. As your HIGHEST magic skill increases, the maximum slot count increases. Slots are added at a skill of 20, 30, 40, 60, 80 and 100, for a maximum total of 9 slots.")
+    endif
 EndEvent
 
 
