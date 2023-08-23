@@ -107,9 +107,7 @@ function RegisterForEvents()
 	factionDarkBrotherhood.SetEnemy(EnemyOfDarkBrotherhood)
 	factionVigilants.SetEnemy(EnemyOfVigilants)
 	factionWinterholdCollege.SetEnemy(EnemyOfWinterholdCollege)
-	if mcmOptions.burnInSunlight
-		RegisterForSingleUpdate(1.5)
-	endif
+	RegisterForSingleUpdate(1.5)
 	InitSkillNames()
     if bookNames == 0
         bookNames = JFormMap.object()
@@ -122,6 +120,7 @@ endfunction
 
 Event OnUpdate()
 	; runs every 1.5s
+    ; ConsoleUtil.PrintMessage("running OnUpdate")
 
 	if mcmOptions.burnInSunlight
 		if !player.IsInInterior() && Game.GetSunPositionZ() > 0
@@ -155,6 +154,7 @@ EndEvent
 
 Event OnMenuClose(string menu)
     consoleutil.printmessage("--menuclose " + menu)
+    RegisterForSingleUpdate(1.5)
     if menu == "InventoryMenu" || menu == "Journal Menu" || menu == "MagicMenu"
         UnequipProhibitedItems()
 

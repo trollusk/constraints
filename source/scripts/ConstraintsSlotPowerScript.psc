@@ -22,7 +22,16 @@ Event OnEffectStart(Actor target, Actor caster)
  
     if caster == player
         if !playerref.SafeLocation(player.GetCurrentLocation())
-            debug.MessageBox("To favorite and unfavorite spells, you must be \nin a safe location such as an inn, guild, or player home.")
+            ; Show a dialog message listing currently slotted spells, but don't allow changing them
+            int slots = playerref.CalculateSpellSlots()
+            index = 1
+            string spellNames = "Slotted spells:\n\n" + playerref.slottedSpells[0].GetName()
+            while index < slots
+                spellNames = spellNames + "\n" + playerref.slottedSpells[index].GetName()
+                index += 1
+            endwhile
+            spellNames = spellNames + "\n\n(To assign slots, use this power in a safe location)"
+            debug.MessageBox(spellNames)
         else
             ; Do this once only, as it's slow
             debug.notification("Please wait, getting list of player spells...")
@@ -118,20 +127,31 @@ endfunction
 Spell function SelectSpell_UIExt()
 	UIListMenu menu = UIExtensions.GetMenu("UIListMenu") as UIListMenu
 
+    string[] entries = new string[2]
     int menuLine = 0
     int spellIndex = 0
     int index = 0
 
     menu.ResetMenu()
-    menu.AddEntryItem("=== Slot which spell? ===", -1, -2, false)
-    menu.AddEntryItem("(nothing)", -1, 999, false)
+    menu.AddEntryItem("+++ Slot which spell? +++", -1, -2, false)
+    menu.AddEntryItem("<nothing>", -1, 999, false)
+    entries[0] = "+++ Slot which spell? +++ ;;-1;;0;;-2;;0"
+    entries[1] = "<nothing> ;;-1;;0;;999;;0"
 
     index = 0
     while index < playerSpellCount
         menu.AddEntryItem(playerSpells[index].GetName(), -1, index, false)
+        ; Format: text;;parent;;id;;callback;;children
+        ; PO3_SKSEFunctions.AddStringToArray(playerSpells[index].GetName() + "     ;;-1;;" + index + ";;0", entries)
+        entries = PapyrusUtil.PushString(entries, playerSpells[index].GetName() + "     ;;-1;;0;;" + index + ";;0")
+        consoleutil.PrintMessage("Entries length: " + entries.Length)
         index += 1
     endwhile
 
+    entries = PO3_SKSEFunctions.SortArrayString(entries)
+    consoleutil.PrintMessage("After sorting, entries length: " + entries.Length)
+    menu.ResetMenu()
+    menu.SetPropertyStringA("appendEntries", entries)
     menu.OpenMenu()
 
     int selected = menu.GetResultFloat() as int
