@@ -360,11 +360,11 @@ Event OnObjectEquipped (Form base, ObjectReference ref)
                 ;     UnequipSpellFromAllSlots(sp)
                 ;     ForceRefreshMagicMenu()
                 if IsProhibitedSchool(GetSpellSchool(sp))
-                    notification("You may not equip that spell.")
+                    notification("You may not cast spells from the school of " + GetSpellSchool(sp) + ".")
                     UnequipSpellFromAllSlots(sp)
                     ForceRefreshMagicMenu()
                 endif
-			elseif mcmOptions.noPower && IsPower(sp)   ;player.GetEquippedSpell(2) == sp
+			elseif mcmOptions.noPower && IsPower(sp) && sp != mcmOptions.changeSlotsPower && sp != mcmOptions.oneFollowerPower
 				notification("You may not use powers.")
 				UnequipSpellFromAllSlots(sp)
 				ForceRefreshMagicMenu()
@@ -719,7 +719,7 @@ EndFunction
 
 Function UnequipProhibitedItems()
 	Form[] items = PO3_SKSEFunctions.AddAllEquippedItemsToArray(player)
-    consoleutil.printmessage("--unequip prohibited items")
+    ;consoleutil.printmessage("--unequip prohibited items")
 	;consoleutil.printmessage("Got list of " + items.Length + " equipped items")
 	int index = 0
 	while index < items.Length
@@ -739,6 +739,14 @@ Function UnequipProhibitedItems()
             consoleutil.printmessage("Spell in hand " + hand + " = " + sp.GetName())
             if sp && IsProhibitedItem(sp)
                 UnequipSpellFromAllSlots(sp)
+                ; Produce a notification explaining why we can't use this spell
+                if IsProhibitedSchool(GetSpellSchool(sp))
+			        notification("You may not cast spells from the school of " + GetSpellSchool(sp) + ".")
+                elseif mcmOptions.useSpellSlots && IsTrueSpell(sp) && !SpellIsSlotted(sp)
+                    notification("You may not cast '" + sp.GetName() + "', as it is not one of your slotted spells.")
+		        elseif mcmOptions.noPower && IsPower(sp) && sp != mcmOptions.changeSlotsPower && sp != mcmOptions.oneFollowerPower
+			        notification("You may not use powers.")
+		        endif
             endif
         endif
 		hand += 1
@@ -868,7 +876,7 @@ bool Function IsProhibitedItem(Form base)
 			return true
         elseif mcmOptions.useSpellSlots && IsTrueSpell(sp) && !SpellIsSlotted(sp)
             return true
-		elseif mcmOptions.noPower && player.GetEquippedSpell(2) == sp
+		elseif mcmOptions.noPower && IsPower(sp) && sp != mcmOptions.oneFollowerPower && sp != mcmOptions.changeSlotsPower
 			return true
 		endif
 	elseif mcmOptions.noShout && (base as Shout)
