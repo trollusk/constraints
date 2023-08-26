@@ -20,6 +20,8 @@ Event OnEffectStart(Actor target, Actor caster)
     int numSpells = 0
     int index = 0
  
+    player.RemoveSpell(playerref.magickaFatigueSpell)
+
     if caster == player
         if !playerref.SafeLocation(player.GetCurrentLocation())
             ; Show a dialog message listing currently slotted spells, but don't allow changing them

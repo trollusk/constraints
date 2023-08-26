@@ -65,9 +65,10 @@ Keyword Property guildLocationKeyword  Auto
 Keyword Property templeLocationKeyword  Auto 
 
 Spell[] property slottedSpells auto     ; contains all slotted spells
-; int favSpellCount = 0
 int spellSlots = 0
-; Spell[] favSpells
+
+Spell property magickaFatigueSpell auto
+MagicEffect property magickaFatigueEffect auto
 
 
 Event OnInit()
@@ -1128,6 +1129,22 @@ function AssignSpellToSlot(Spell sp, int slot)
         slottedSpells[slot] = sp
     endif
 endfunction
+
+
+Event OnMagicEffectApply(ObjectReference caster, MagicEffect effect)
+    if caster == player && effect.HasKeywordString("MagicRestoreHealth")
+        ConsoleUtil.PrintMessage("player self heal: " + effect.GetBaseCost())
+        if !player.HasMagicEffect(magickaFatigueEffect)
+            consoleutil.printmessage("Adding magicka fatigue")
+            player.RemoveSpell(magickaFatigueSpell)
+            player.AddSpell(magickaFatigueSpell, false)
+        else
+            float magnitude = magickaFatigueSpell.GetNthEffectMagnitude(0)
+            magickaFatigueSpell.SetNthEffectMagnitude(0, magnitude + effect.GetBaseCost() / 2.0)
+            consoleutil.printmessage("Setting effect magnitude to " + magickaFatigueSpell.GetNthEffectMagnitude(0))
+        endif
+    endif
+EndEvent
 
 
 ; function UpdateFavouriteSpellList()
